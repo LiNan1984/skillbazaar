@@ -1,0 +1,511 @@
+[
+  {
+    "name": "code-reviewer",
+    "display_name": "AI 代码审查专家",
+    "description": "自动审查代码中的 Bug、安全漏洞、逻辑错误、性能问题和代码风格违规。按严重程度组织发现的问题，并提供修复建议和代码示例。支持 SQL 注入检测、XSS 漏洞扫描、认证绕过检查等。兼容 Claude Code、GitHub Copilot CLI、Sourcery 等 SKILL.md 兼容的 AI 编码代理。",
+    "category": "Skill",
+    "sub_category": "code-review",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Samuel Rose",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "code-review",
+      "security",
+      "bugs",
+      "best-practices",
+      "pull-request"
+    ],
+    "content_preview": "# code-reviewer\n\nReviews your code for bugs, security vulnerabilities, logic errors, performance issues, and style violations. Organizes findings by severity and suggests fixes with code examples.\n\n## Use Cases\n- Identify security vulnerabilities like SQL injection and cross-site scripting\n- Surface performance bottlenecks and logic errors before deployment\n- Categorize findings by severity to prioritize critical fixes first\n- Apply suggested code examples to resolve style and syntax violations\n\n## Severity Levels\n- Critical: Security vulnerabilities, data loss risks\n- Warning: Logic errors, performance bottlenecks\n- Suggestion: Style violations, refactoring opportunities"
+  },
+  {
+    "name": "git-commit-writer",
+    "display_name": "Git 提交信息生成器",
+    "description": "通过分析你的 Git 暂存更改，自动生成符合 Conventional Commits 规范的提交信息。自动检测提交类型（feat/fix/refactor 等）、范围和破坏性变更。支持中英文提交信息，帮助团队保持规范的 Git 提交历史。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Samuel Rose",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "git",
+      "commit",
+      "conventional-commits",
+      "productivity"
+    ],
+    "content_preview": "# git-commit-writer\n\nWrites conventional commit messages by analyzing your staged git changes. Detects commit type, scope, and breaking changes automatically.\n\n## How it works\n1. Analyzes `git diff --cached` output\n2. Identifies changed files and their impact\n3. Determines commit type (feat, fix, refactor, docs, etc.)\n4. Generates a structured commit message following Conventional Commits spec\n\n## Example Output\n```\nfeat(auth): add JWT refresh token rotation\n\n- Implement refresh token family tracking\n- Add automatic reuse detection\n- Invalidate compromised token families"
+  },
+  {
+    "name": "readme-generator",
+    "display_name": "README 文档生成器",
+    "description": "通过扫描项目实际结构、依赖和代码，自动生成完整、精美的 README.md 文件。自动检测技术栈，生成安装说明、使用示例、API 文档和贡献指南。支持自动识别 package.json、requirements.txt、go.mod 等依赖文件。",
+    "category": "Skill",
+    "sub_category": "documentation",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Samuel Rose",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "readme",
+      "documentation",
+      "generator",
+      "project-setup"
+    ],
+    "content_preview": "# readme-generator\n\nGenerates a complete, polished README.md by scanning your actual project structure, dependencies, and code.\n\n## What it detects\n- Project type (Node.js, Python, Go, Rust, etc.)\n- Dependencies from manifests (package.json, requirements.txt, go.mod)\n- Available scripts and commands\n- License information\n- Test frameworks\n\n## Generated sections\n- Project overview with badges\n- Installation instructions\n- Usage examples\n- API reference\n- Contributing guidelines"
+  },
+  {
+    "name": "env-doctor",
+    "display_name": "环境诊断医生",
+    "description": "系统化诊断项目无法启动的原因。检查运行时版本、依赖安装、环境变量配置、数据库连接、端口占用和构建产物。快速定位开发环境问题，提供逐步修复建议。支持 Node.js、Python、Go、Java 等主流技术栈。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Samuel Rose",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "debugging",
+      "environment",
+      "diagnostics",
+      "devops"
+    ],
+    "content_preview": "# env-doctor\n\nDiagnoses why your project will not start. Checks runtime versions, dependencies, environment variables, databases, ports, and build artifacts systematically.\n\n## Diagnostic Checklist\n1. Runtime version compatibility (Node, Python, Go, Java)\n2. Dependency installation and version conflicts\n3. Required environment variables (.env files)\n4. Database connection and migration status\n5. Port availability and conflicts\n6. Build artifacts and compilation errors\n\n## Example Output\n```\n[FAIL] Node.js version mismatch: expected >=18.0.0, found 16.20.0\n[WARN] Missing env var: DATABASE_URL\n[OK]   Port 3000 available"
+  },
+  {
+    "name": "pr-description-writer",
+    "display_name": "PR 描述生成器",
+    "description": "通过分析分支差异自动撰写清晰的 Pull Request 描述。涵盖变更内容、变更原因、变更方式和测试建议。支持 GitHub、GitLab 和 Bitbucket 平台。自动生成变更摘要、影响范围和测试检查清单。",
+    "category": "Skill",
+    "sub_category": "code-review",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Samuel Rose",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "pull-request",
+      "code-review",
+      "git",
+      "documentation"
+    ],
+    "content_preview": "# pr-description-writer\n\nWrites clear pull request descriptions by analyzing your branch diff. Covers what changed, why, how, and what to test.\n\n## Generated sections\n- Summary: High-level overview of changes\n- What changed: Detailed file-by-file breakdown\n- Why: Motivation and context\n- How to test: Testing checklist\n- Screenshots: UI change comparisons (if applicable)\n\n## Supported platforms\n- GitHub\n- GitLab\n- Bitbucket"
+  },
+  {
+    "name": "dockerfile-gen",
+    "display_name": "Docker 容器化生成器",
+    "description": "即时生成优化的多阶段 Dockerfile 和 docker-compose 配置文件。支持 Go、Rust、Node.js、Python、Java 等语言的多阶段构建，自动检测框架、依赖和运行时需求。生成包含健康检查、非 root 用户和安全最佳实践的生产级容器配置。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "docker",
+      "devops",
+      "containerization",
+      "deployment",
+      "infrastructure-as-code"
+    ],
+    "content_preview": "# dockerfile-gen\n\nInstantly generate optimized multi-stage Dockerfiles and docker-compose configs for any web project.\n\n## What it does\n- Framework Intelligence: Automatically detects Node.js, Next.js, Python, Go, Rust, Java\n- Multi-Stage Builds: Generates small, secure production images\n- Dependency Mapping: Extracts environment variables from manifests\n- Networking: Scans source code for port definitions\n- Orchestration: Creates docker-compose.yml with health checks\n\n## Example Output\n1. Dockerfile: Multi-stage build (node:lts-alpine), non-root user, EXPOSE 3000\n2. docker-compose.yml: Service with healthcheck and .env mapping\n3. .dockerignore: Excludes node_modules and .git"
+  },
+  {
+    "name": "security-audit",
+    "display_name": "Web 安全审计专家",
+    "description": "针对 Web 应用和 API 的专业安全审计技能。系统分析入口点、信任边界和数据路径，识别认证、会话管理、输入验证和基础设施配置中的风险。采用结构化商业方法论，按严重程度分类安全风险，生成包含具体证据和修复方案的详细报告。",
+    "category": "Skill",
+    "sub_category": "security",
+    "price": 10,
+    "original_price": 15,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "security-audit",
+      "web-security",
+      "penetration-testing",
+      "api-security"
+    ],
+    "content_preview": "# security-audit\n\nProfessional security audit skill for web apps and APIs with structured severity-based findings and remediation plans.\n\n## Key coverage areas\n- Authentication and Authorization flows\n- Input validation and Output safety (XSS/SQLi prevention)\n- Dependency hygiene and configuration hardening\n- API transport security and exposure\n\n## Example Output\n```\n[HIGH] Auth: Missing CSRF protection on /api/profile\n  Evidence: user_settings.js L42\n  Fix: Implement SameSite=Strict cookies and double-submit token\n[MED] Config: Debug mode enabled in production\n  Evidence: .env.prod L4\n  Fix: Set APP_DEBUG=false"
+  },
+  {
+    "name": "api-designer",
+    "display_name": "API 设计与评审专家",
+    "description": "针对 REST、GraphQL 和事件驱动架构的专业 API 设计与评审技能。提供资源命名规范、状态码选择、分页策略、过滤排序、错误响应格式、版本控制和限流设计等最佳实践。帮助设计一致、规范且易于维护的 API 接口。",
+    "category": "Skill",
+    "sub_category": "api-development",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "api-design",
+      "rest-api",
+      "graphql",
+      "api-development"
+    ],
+    "content_preview": "# api-designer\n\nProfessional API design and review skill for REST, GraphQL, and event-driven architectures.\n\n## Design Principles\n- Resource naming conventions (plural nouns, kebab-case)\n- Proper HTTP status codes for each operation\n- Pagination strategies (cursor-based, offset-based)\n- Filtering, sorting, and field selection\n- Consistent error response format (RFC 7807)\n- API versioning strategies\n- Rate limiting and throttling design\n\n## Review Checklist\n- Endpoint consistency and naming conventions\n- Request/response schema validation\n- Authentication and authorization patterns\n- Idempotency for PUT/DELETE operations"
+  },
+  {
+    "name": "prompt-engineer",
+    "display_name": "Prompt 工程专家",
+    "description": "专业的 Prompt 工程模式指南，用于构建健壮、安全且生产级的 LLM 应用。涵盖提示词设计、系统提示优化、少样本学习、链式思维、输出格式控制和安全防护等核心技巧。适用于构建 AI Agent、聊天机器人和自动化工作流。",
+    "category": "Skill",
+    "sub_category": "ai-ml",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "prompt-engineering",
+      "llm-ops",
+      "ai-agents"
+    ],
+    "content_preview": "# prompt-engineer\n\nProfessional prompt engineering patterns for building robust, secure, and production-ready LLM applications.\n\n## Core Patterns\n- System prompt architecture\n- Few-shot learning templates\n- Chain-of-thought prompting\n- Output format control (JSON, XML, Markdown)\n- Safety guardrails and injection prevention\n- Token optimization strategies\n\n## Best Practices\n- Clear instruction hierarchy\n- Delimiter usage for structured input\n- Temperature and sampling guidelines\n- Prompt versioning and A/B testing"
+  },
+  {
+    "name": "migration-auditor",
+    "display_name": "数据库迁移审计器",
+    "description": "在数据库迁移进入生产环境之前捕获危险操作。审查 PostgreSQL、MySQL 和 SQLite 的 Schema 变更，检测锁表风险、数据丢失隐患、缺失的回滚脚本和索引问题。提供安全的迁移策略建议和分阶段执行计划。",
+    "category": "Skill",
+    "sub_category": "data-engineering",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "database",
+      "migrations",
+      "postgresql",
+      "data-safety"
+    ],
+    "content_preview": "# migration-auditor\n\nCatches dangerous database migrations before they hit production. Reviews schema changes for locking hazards, data loss, missing rollbacks, and index issues across PostgreSQL, MySQL, and SQLite.\n\n## Audit Checks\n- Full table scan operations causing locks\n- Column removal without data backup\n- Missing rollback (DOWN) migrations\n- Index creation on large tables\n- Foreign key constraint changes\n- Data type narrowing (potential truncation)\n\n## Risk Levels\n- CRITICAL: Data loss risk, irreversible changes\n- HIGH: Extended lock duration (>5min on large tables)\n- MEDIUM: Performance degradation risk\n- LOW: Style and naming conventions"
+  },
+  {
+    "name": "test-gen",
+    "display_name": "自动化测试生成器",
+    "description": "自动生成包含边界情况分析的测试代码，支持 TypeScript、Python、Go 和 Rust 框架原生语法。通过分析源代码自动识别测试场景，生成单元测试、集成测试和端到端测试。覆盖正常路径、边界条件和异常处理。",
+    "category": "Skill",
+    "sub_category": "testing",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "unit-testing",
+      "typescript",
+      "python",
+      "test-generation"
+    ],
+    "content_preview": "# test-gen\n\nAutomated test generation with edge case analysis and framework-native syntax for TS, Python, Go, and Rust.\n\n## Supported Frameworks\n- TypeScript: Jest, Vitest, Mocha\n- Python: pytest, unittest\n- Go: testing package, testify\n- Rust: built-in test framework\n\n## Generation Strategy\n1. Analyze function signatures and types\n2. Identify happy paths and edge cases\n3. Generate parameterized test cases\n4. Add boundary value tests\n5. Include error handling scenarios\n\n## Example\n```python\n# Generated test for divide(a, b)\ndef test_divide_normal(): assert divide(10, 2) == 5\ndef test_divide_by_zero(): pytest.raises(ZeroDivisionError)\ndef test_divide_negative(): assert divide(-10, 2) == -5"
+  },
+  {
+    "name": "deep-research-team",
+    "display_name": "深度研究团队",
+    "description": "部署层次化的 AI Agent 团队，执行 15-30 分钟的深度研究任务，支持并行执行。自动将复杂研究问题分解为子任务，分配给专门的 Agent 并行处理，最后汇总生成结构化研究报告。适用于市场调研、技术调研和竞品分析。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "deep-research",
+      "multi-agent",
+      "market-intelligence"
+    ],
+    "content_preview": "# deep-research-team\n\nDeploy a hierarchical team of AI agents to perform 15-30 minute deep-dive research with parallel execution.\n\n## Architecture\n- Lead Researcher: Decomposes questions, synthesizes findings\n- Subject Analysts: Domain-specific deep dives\n- Fact Checker: Verifies claims with sources\n- Report Writer: Structures output into sections\n\n## Workflow\n1. Receive research question\n2. Decompose into 3-5 sub-questions\n3. Assign to parallel analysts\n4. Collect and cross-reference findings\n5. Generate structured report with citations\n\n## Output Format\n- Executive summary\n- Key findings with evidence\n- Contradictions and gaps\n- Recommended actions"
+  },
+  {
+    "name": "changelog-generator",
+    "display_name": "变更日志生成器",
+    "description": "从 Git 历史自动生成面向用户的变更日志。将开发者提交信息转化为用户易懂的发布说明。支持 Conventional Commits 格式，自动分类变更（新增功能、修复、破坏性变更等），生成 Keep a Changelog 格式的 CHANGELOG.md。",
+    "category": "Skill",
+    "sub_category": "documentation",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "changelog",
+      "release-notes",
+      "versioning",
+      "documentation"
+    ],
+    "content_preview": "# changelog-generator\n\nGenerates user-facing changelogs from git history. Transforms developer commit messages into clear release notes that users actually understand.\n\n## Features\n- Parses Conventional Commits format\n- Groups changes by type (Added, Changed, Fixed, Breaking)\n- Links to related PRs and issues\n- Generates version comparison links\n- Supports Keep a Changelog format\n\n## Example Output\n## [2.1.0] - 2026-05-01\n### Added\n- JWT refresh token rotation for enhanced security\n- Export to CSV feature in reports module\n### Fixed\n- Memory leak in long-running WebSocket connections\n### Breaking\n- Removed deprecated /api/v1/users endpoint"
+  },
+  {
+    "name": "github-actions-gen",
+    "display_name": "GitHub Actions 工作流生成器",
+    "description": "自动检测项目技术栈并生成生产级 GitHub Actions CI/CD 工作流。支持 Node.js、Python、Go、Java、Rust 等主流语言。生成包含测试、构建、Lint、安全扫描和部署的完整流水线配置。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "github-actions",
+      "ci-cd",
+      "devops",
+      "automation"
+    ],
+    "content_preview": "# github-actions-gen\n\nAutomatically detect your tech stack and generate a production-ready GitHub Actions CI/CD workflow.\n\n## Detected Workflows\n- Node.js: npm ci, lint, test, build\n- Python: pip install, pytest, mypy, black\n- Go: go test, go vet, golangci-lint\n- Java: Maven/Gradle build, test, package\n- Rust: cargo test, clippy, rustfmt\n\n## Generated Pipeline Stages\n1. Lint & Format Check\n2. Unit Tests with coverage\n3. Integration Tests\n4. Security Scan (SAST)\n5. Build & Package\n6. Deploy (staging/production)\n\n## Features\n- Matrix builds for multiple OS/versions\n- Caching for dependencies\n- Artifact upload for build outputs"
+  },
+  {
+    "name": "rag-architect",
+    "display_name": "RAG 系统架构师",
+    "description": "设计、调试和优化生产级 RAG（检索增强生成）系统。提供专家级架构建议、混合搜索策略和知识库质量优化方案。涵盖向量数据库选型、嵌入模型调优、检索策略设计和答案生成优化等关键环节。",
+    "category": "Skill",
+    "sub_category": "ai-ml",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "rag",
+      "vector-databases",
+      "search-relevancy",
+      "ai-architecture"
+    ],
+    "content_preview": "# rag-architect\n\nDesign, debug, and optimize production RAG systems with expert architecture, hybrid search, and grounding strategies.\n\n## Architecture Review\n- Chunking strategy evaluation (fixed, semantic, recursive)\n- Embedding model selection and fine-tuning\n- Vector store comparison (Pinecone, Weaviate, Chroma, pgvector)\n- Retrieval strategy (dense, sparse, hybrid)\n- Reranking pipeline design\n\n## Debugging Checklist\n- Retrieval precision and recall metrics\n- Answer groundedness evaluation\n- Hallucination detection patterns\n- Query decomposition for complex questions\n\n## Optimization\n- Chunk overlap tuning\n- Metadata filtering strategies\n- Query expansion techniques\n- Context window management"
+  },
+  {
+    "name": "incident-postmortem",
+    "display_name": "事故复盘报告生成器",
+    "description": "将原始事故日志和 Slack 讨论记录转化为无指责的结构化事故复盘报告和 5-Whys 根因分析。自动提取时间线、影响范围、根因和改进措施，生成专业的事后分析文档。帮助团队从故障中学习，建立持续改进文化。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "sre",
+      "devops",
+      "incident-response",
+      "postmortem"
+    ],
+    "content_preview": "# incident-postmortem\n\nTransform raw incident logs and Slack threads into blameless, structured postmortems and 5-Whys RCA reports.\n\n## Generated Report Sections\n1. Incident Summary (severity, duration, impact)\n2. Timeline (UTC-normalized event sequence)\n3. Root Cause Analysis (5-Whys framework)\n4. Impact Assessment (users affected, revenue impact)\n5. What Went Well\n6. What Could Be Improved\n7. Action Items (with owners and deadlines)\n\n## Principles\n- Blameless: Focus on systems, not people\n- Evidence-based: Cite logs, metrics, timestamps\n- Actionable: Every finding has a concrete action item\n- Measurable: Include SLA/SLO impact calculations"
+  },
+  {
+    "name": "subagent-orchestrator",
+    "display_name": "子代理编排协调器",
+    "description": "将 AI Agent 转换为协调器，管理并行子代理执行复杂的编码和研究任务。基于 Claude Code 源码映射开发，支持任务分解、代理分配、结果汇总和冲突解决。适用于大型项目的并行开发和复杂研究任务的分工协作。",
+    "category": "Skill",
+    "sub_category": "ai-ml",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "multi-agent",
+      "orchestration",
+      "autonomous-agents"
+    ],
+    "content_preview": "# subagent-orchestrator\n\nTurn your AI agent into a coordinator that manages parallel subagents for complex coding and research tasks.\n\n## Architecture\n- Orchestrator: Task decomposition and assignment\n- Workers: Parallel task execution\n- Merger: Result synthesis and conflict resolution\n\n## Workflow\n1. Receive complex task\n2. Decompose into independent subtasks\n3. Assign to specialized subagents\n4. Monitor progress and handle failures\n5. Merge results and resolve conflicts\n\n## Use Cases\n- Multi-file refactoring\n- Parallel research across domains\n- Full-stack feature implementation\n- Large-scale code migration"
+  },
+  {
+    "name": "nginx-config",
+    "display_name": "Nginx 配置生成器",
+    "description": "从自然语言描述生成生产就绪、带详细注释的 Nginx 配置文件。支持反向代理、负载均衡、SSL/TLS 配置、缓存策略、速率限制和安全头部等常见场景。所有配置均遵循安全最佳实践。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "nginx",
+      "devops",
+      "infrastructure",
+      "configuration"
+    ],
+    "content_preview": "# nginx-config\n\nGenerate production-ready, commented Nginx configurations from plain English descriptions.\n\n## Supported Scenarios\n- Reverse proxy with SSL termination\n- Load balancing (round-robin, least_conn, ip_hash)\n- Static file serving with caching\n- WebSocket proxying\n- Rate limiting and DDoS protection\n- Gzip compression\n- Security headers (HSTS, CSP, X-Frame)\n\n## Best Practices Included\n- SSL/TLS hardening (Mozilla Modern profile)\n- OCSP stapling\n- HTTP/2 and HTTP/3 support\n- Access and error logging\n- Health check endpoints\n- Worker process auto-tuning"
+  },
+  {
+    "name": "content-writer",
+    "display_name": "中文社媒内容生成器",
+    "description": "多平台中文社交媒体内容生成工具。支持小红书、微信公众号、抖音、微博等平台的文案创作。自动适配各平台的内容风格和格式要求，生成符合平台调性的原创内容。包含关键词优化和广告法合规检查。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "content",
+      "writing",
+      "social-media",
+      "chinese"
+    ],
+    "content_preview": "# content-writer\n\nMulti-platform content generator for Chinese social media platforms.\n\n## Supported Platforms\n- 小红书 (Xiaohongshu): 种草笔记、合集推荐\n- 微信公众号: 深度文章、图文排版\n- 抖音 (Douyin): 短视频脚本、文案\n- 微博 (Weibo): 热点评论、话题互动\n\n## Features\n- Platform-specific tone and style\n- Keyword optimization for each platform\n- Advertising law compliance check\n- Emoji and formatting templates\n- Trending hashtag suggestions\n- Content calendar planning"
+  },
+  {
+    "name": "aws-architect",
+    "display_name": "AWS 云架构师",
+    "description": "专家级 AWS 架构设计指导，帮助构建安全、可扩展且成本优化的生产环境。涵盖 VPC 设计、EC2/ECS/Lambda 选型、RDS/DynamoDB 数据库架构、S3 存储策略、CloudFront CDN、IAM 安全策略和成本优化方案。",
+    "category": "Skill",
+    "sub_category": "devops",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Rian O'Leary",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "aws",
+      "cloud-architecture",
+      "devops",
+      "infrastructure"
+    ],
+    "content_preview": "# aws-architect\n\nExpert AWS architecture guidance for building secure, scalable, and cost-optimized production environments.\n\n## Architecture Review Areas\n- VPC design (public/private subnets, NAT gateways)\n- Compute selection (EC2, ECS Fargate, Lambda, EKS)\n- Database (RDS Multi-AZ, DynamoDB, ElastiCache)\n- Storage (S3 lifecycle policies, EFS, EBS)\n- Networking (ALB/NLB, CloudFront, Route 53)\n- Security (IAM policies, KMS, WAF, GuardDuty)\n- Cost optimization (Reserved Instances, Spot, Savings Plans)\n\n## Well-Architected Framework\n- Operational Excellence\n- Security\n- Reliability\n- Performance Efficiency\n- Cost Optimization\n- Sustainability"
+  },
+  {
+    "name": "db-schema",
+    "display_name": "数据库 Schema 设计器",
+    "description": "将自然语言应用描述转化为完全规范化的 SQL Schema 和实体关系文档。支持 PostgreSQL、MySQL 和 SQLite。自动设计表结构、外键关系、索引策略和数据类型选择。生成包含 ER 图描述的完整数据库设计文档。",
+    "category": "Skill",
+    "sub_category": "data-engineering",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "database-design",
+      "sql",
+      "postgresql",
+      "schema"
+    ],
+    "content_preview": "# db-schema\n\nTurn plain English app descriptions into fully normalized SQL schemas and entity relationship documentation.\n\n## Design Process\n1. Extract entities and relationships from description\n2. Apply normalization (1NF through 5NF)\n3. Define primary and foreign keys\n4. Choose appropriate data types\n5. Design indexes for query patterns\n6. Add constraints and validations\n\n## Generated Output\n- CREATE TABLE statements with comments\n- Index creation scripts\n- Migration files (up/down)\n- ER diagram description (Mermaid syntax)\n- Seed data templates\n\n## Supported Databases\n- PostgreSQL (with JSONB, arrays, enums)\n- MySQL (with full-text search)\n- SQLite (with FTS5)"
+  },
+  {
+    "name": "sprint-planner",
+    "display_name": "敏捷冲刺规划器",
+    "description": "自动将复杂 Epic 分解为结构化的 Sprint 任务，包含故事点估算、验收标准和依赖关系图。支持敏捷开发流程，生成包含优先级排序、任务分配建议和风险识别的冲刺计划。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "agile",
+      "project-management",
+      "sprint-planning"
+    ],
+    "content_preview": "# sprint-planner\n\nAutomatically decompose complex epics into structured sprint tasks with story points, AC, and dependency maps.\n\n## Planning Process\n1. Parse epic description and acceptance criteria\n2. Identify user stories and technical tasks\n3. Estimate story points using Fibonacci scale\n4. Map dependencies between tasks\n5. Identify risks and blockers\n6. Generate sprint backlog with priorities\n\n## Output Format\n- Sprint backlog with task breakdown\n- Story point estimates\n- Dependency graph (Mermaid)\n- Risk register\n- Velocity projection\n- Capacity allocation recommendations"
+  },
+  {
+    "name": "seo-optimizer",
+    "display_name": "SEO 优化与合规检查器",
+    "description": "针对中文社交媒体的 SEO 优化和广告法合规检查工具。支持关键词密度分析、标题优化、Meta 标签生成和敏感词检测。自动检查内容是否符合《广告法》规定，避免使用违禁词汇。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "seo",
+      "optimization",
+      "compliance",
+      "chinese-social-media"
+    ],
+    "content_preview": "# seo-optimizer\n\nSEO optimizer and banned-word scanner for Chinese social media. Keyword optimization and advertising law compliance.\n\n## Features\n- Keyword density analysis and suggestions\n- Title and heading optimization\n- Meta description generation\n- Internal linking recommendations\n- Chinese Advertising Law compliance check\n  - Absolute prohibited terms (最, 第一, etc.)\n  - Restricted claims requiring evidence\n  - Industry-specific regulations\n\n## Supported Platforms\n- 小红书 SEO\n- 微信公众号 SEO\n- 抖音搜索优化\n- 百度 SEO\n\n## Output\n- SEO score (0-100)\n- Keyword placement suggestions\n- Compliance warnings with law references"
+  },
+  {
+    "name": "humanize-writing",
+    "display_name": "AI 文本人性化改写",
+    "description": "将机械化的 AI 生成文本转化为自然、人类风格的流畅散文。保留原始信息的完整性和准确性，同时消除 AI 写作的典型特征（重复结构、过度正式、缺乏情感等）。支持中文和英文内容的人性化改写。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "writing",
+      "editing",
+      "localization",
+      "ai-detection"
+    ],
+    "content_preview": "# humanize-writing\n\nTransform robotic AI drafts into natural, human-sounding prose with native-level flow and tone.\n\n## What it fixes\n- Repetitive sentence structures\n- Overly formal or academic tone\n- Generic transitions and filler phrases\n- Lack of voice and personality\n- Inconsistent tone across sections\n\n## Techniques\n- Vary sentence length and rhythm\n- Add conversational markers\n- Replace generic phrases with specific language\n- Introduce natural transitions\n- Adjust tone to match target audience\n\n## Detection Avoidance\n- Reduce predictability patterns\n- Add personal anecdotes and examples\n- Use idiomatic expressions appropriately"
+  },
+  {
+    "name": "dependency-auditor",
+    "display_name": "依赖安全审计器",
+    "description": "审计项目依赖的安全性、许可证合规性和健康状态，生成分阶段的低风险升级和迁移计划。检查已知漏洞（CVE）、废弃包、许可证冲突和版本过时问题。支持 npm、pip、go mod、Maven 等主流包管理器。",
+    "category": "Skill",
+    "sub_category": "security",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "dependency-management",
+      "security-audit",
+      "devops"
+    ],
+    "content_preview": "# dependency-auditor\n\nAudit dependencies for security, licenses, and health while generating a phased, low-risk upgrade and migration plan.\n\n## Audit Areas\n- Known vulnerabilities (CVE database)\n- Deprecated or abandoned packages\n- License compliance (GPL, MIT, Apache, etc.)\n- Outdated versions with available updates\n- Transitive dependency conflicts\n\n## Output\n- Risk-scored dependency inventory\n- Phased upgrade plan (low → high risk)\n- Breaking change analysis per version\n- License compliance matrix\n- Alternative package recommendations\n\n## Supported Package Managers\n- npm / yarn / pnpm\n- pip / poetry / pipenv\n- go mod\n- Maven / Gradle\n- Cargo"
+  },
+  {
+    "name": "code-converter",
+    "display_name": "代码语言转换器",
+    "description": "在 Python、TypeScript 和 Go 之间进行惯用式代码翻译，保持逻辑等价性的同时适应目标语言的语言特性。不是简单的语法转换，而是生成符合目标语言惯用写法的地道代码。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 12,
+    "original_price": 19,
+    "seller_name": "Kevin Cline",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "refactoring",
+      "python",
+      "typescript",
+      "code-translation"
+    ],
+    "content_preview": "# code-converter\n\nIdiomatic code translation between Python, TypeScript, and Go that preserves logic and adapts language-specific patterns.\n\n## Translation Approach\n- Not syntax-to-syntax: idiomatic patterns per language\n- Preserves business logic and intent\n- Adapts error handling patterns (exceptions → errors, try/catch → if err)\n- Converts type systems (dynamic → static)\n- Maps standard library equivalents\n\n## Language Pairs\n- Python → TypeScript: type hints → interfaces, decorators → decorators\n- TypeScript → Go: interfaces → structs, async/await → goroutines\n- Go → Python: goroutines → asyncio, embed → inheritance\n\n## Example\nPython list comprehension → TypeScript Array.map/filter → Go slice operations"
+  },
+  {
+    "name": "business-planner",
+    "display_name": "商业计划生成器",
+    "description": "将商业创意转化为严谨的、基于场景的执行计划，包含明确的假设和关键绩效指标（KPI）。支持市场分析、竞争格局、财务预测和风险评估。适用于初创企业、产品立项和商业计划书撰写。",
+    "category": "Skill",
+    "sub_category": "productivity",
+    "price": 5,
+    "original_price": 9,
+    "seller_name": "Roy Yuen",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "business-strategy",
+      "forecasting",
+      "project-management"
+    ],
+    "content_preview": "# business-planner\n\nTransform business ideas into rigorous, scenario-based execution plans with explicit assumptions and KPIs.\n\n## Plan Structure\n1. Executive Summary\n2. Problem & Solution Definition\n3. Market Analysis (TAM/SAM/SOM)\n4. Competitive Landscape\n5. Business Model Canvas\n6. Revenue Projections (best/base/worst case)\n7. Go-to-Market Strategy\n8. Key Assumptions and Risks\n9. KPI Dashboard Design\n10. 90-Day Action Plan\n\n## Scenario Modeling\n- Optimistic, realistic, pessimistic projections\n- Sensitivity analysis for key variables\n- Break-even analysis\n- Unit economics calculations"
+  }
+]

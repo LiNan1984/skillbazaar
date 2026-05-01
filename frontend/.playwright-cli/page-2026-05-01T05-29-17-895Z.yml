@@ -1,0 +1,392 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: 10,000
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "我的库" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e24]: 我的库
+        - button "登录" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - generic [ref=e29]: 登录
+        - button "注册" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+          - generic [ref=e34]: 注册
+  - main [ref=e35]:
+    - generic [ref=e37]:
+      - generic [ref=e38]: 多平台商品聚合
+      - heading "AI Agent · Skill · Cron 智能交易市场" [level=1] [ref=e40]:
+        - text: AI Agent · Skill · Cron
+        - text: 智能交易市场
+      - paragraph [ref=e41]: 发现、购买和发布 AI 智能体技能包，汇聚多个来源平台的优质商品
+      - generic [ref=e42]:
+        - button "探索市场" [ref=e43] [cursor=pointer]
+        - button "发布商品" [ref=e44] [cursor=pointer]
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e47]: 97+
+          - generic [ref=e48]: 优质商品
+        - generic [ref=e50]:
+          - generic [ref=e51]: 4+
+          - generic [ref=e52]: 来源平台
+        - generic [ref=e54]:
+          - generic [ref=e55]: 10,000
+          - generic [ref=e56]: 虚拟币赠送
+    - generic [ref=e59]:
+      - button "全部" [ref=e60] [cursor=pointer]
+      - button "🤖 Agent" [ref=e61] [cursor=pointer]:
+        - generic [ref=e62]: 🤖
+        - text: Agent
+      - button "⚡ Skill" [ref=e63] [cursor=pointer]:
+        - generic [ref=e64]: ⚡
+        - text: Skill
+      - button "⏰ Cron" [ref=e65] [cursor=pointer]:
+        - generic [ref=e66]: ⏰
+        - text: Cron
+      - button "🔄 Workflow" [ref=e67] [cursor=pointer]:
+        - generic [ref=e68]: 🔄
+        - text: Workflow
+    - generic [ref=e69]:
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - text: 共
+          - strong [ref=e72]: "173"
+          - text: 个商品
+        - generic [ref=e73]:
+          - button "热门" [ref=e74] [cursor=pointer]:
+            - img [ref=e75]
+            - text: 热门
+          - button "最新" [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+            - text: 最新
+          - button "价格↑" [ref=e82] [cursor=pointer]:
+            - img [ref=e83]
+            - text: 价格↑
+          - button "价格↓" [ref=e86] [cursor=pointer]:
+            - img [ref=e87]
+            - text: 价格↓
+          - button "评分" [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+            - text: 评分
+      - generic [ref=e100]:
+        - generic [ref=e101] [cursor=pointer]:
+          - generic [ref=e103]: ⚡
+          - heading "prompt-engineering-expert" [level=3] [ref=e104]
+          - paragraph [ref=e105]: 提示工程、自定义指令设计和AI智能体提示优化的高级专家。
+          - generic [ref=e106]:
+            - generic [ref=e107]: 提示工程
+            - generic [ref=e108]: AI
+            - generic [ref=e109]: 优化
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - img [ref=e112]
+              - text: "4.2"
+            - generic [ref=e114]:
+              - img [ref=e115]
+              - text: 50.0k
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - generic [ref=e120]: ￥89
+              - generic [ref=e121]: 金币
+              - generic [ref=e122]: ￥109
+            - generic [ref=e123]:
+              - generic [ref=e124]: 👤
+              - generic [ref=e125]: AgentSkillsHub
+        - generic [ref=e126] [cursor=pointer]:
+          - generic [ref=e128]: ⚡
+          - heading "gate-exchange-subaccount" [level=3] [ref=e129]
+          - paragraph [ref=e130]: Gate 子账户管理：按UID查询状态、列出所有子账户、创建子账户、锁定/解锁。写操作需用户确认。
+          - generic [ref=e131]:
+            - generic [ref=e132]: 子账户
+            - generic [ref=e133]: 管理
+            - generic [ref=e134]: UID
+          - generic [ref=e135]:
+            - generic [ref=e136]:
+              - img [ref=e137]
+              - text: "4.9"
+            - generic [ref=e139]:
+              - img [ref=e140]
+              - text: 49.8k
+          - generic [ref=e143]:
+            - generic [ref=e144]:
+              - generic [ref=e145]: ￥69
+              - generic [ref=e146]: 金币
+              - generic [ref=e147]: ￥89
+            - generic [ref=e148]:
+              - generic [ref=e149]: 👤
+              - generic [ref=e150]: Gate.io
+        - generic [ref=e151] [cursor=pointer]:
+          - generic [ref=e153]: ⚡
+          - heading "rag-architect" [level=3] [ref=e154]
+          - paragraph [ref=e155]: 设计、调试和优化生产级 RAG（检索增强生成）系统。提供专家级架构建议、混合搜索策略和知识库质量优化方案。涵盖向量数据库选型、嵌入模型调优、检索策略设计和答案生成优化等关键环节。
+          - generic [ref=e156]:
+            - generic [ref=e157]: rag
+            - generic [ref=e158]: vector-databases
+            - generic [ref=e159]: search-relevancy
+          - generic [ref=e160]:
+            - generic [ref=e161]:
+              - img [ref=e162]
+              - text: "4.5"
+            - generic [ref=e164]:
+              - img [ref=e165]
+              - text: 49.0k
+          - generic [ref=e168]:
+            - generic [ref=e169]:
+              - generic [ref=e170]: ￥5
+              - generic [ref=e171]: 金币
+              - generic [ref=e172]: ￥9
+            - generic [ref=e173]:
+              - generic [ref=e174]: 👤
+              - generic [ref=e175]: Roy Yuen
+        - generic [ref=e176] [cursor=pointer]:
+          - generic [ref=e178]: ⚡
+          - heading "dockerfile-gen" [level=3] [ref=e179]
+          - paragraph [ref=e180]: 即时生成优化的多阶段 Dockerfile 和 docker-compose 配置文件。支持 Go、Rust、Node.js、Python、Java 等语言的多阶段构建，自动检测框架、依赖和运行时需求。生成包含健康检查、非 root 用户和安全最佳实践的生产级容器配置。
+          - generic [ref=e181]:
+            - generic [ref=e182]: docker
+            - generic [ref=e183]: devops
+            - generic [ref=e184]: containerization
+          - generic [ref=e185]:
+            - generic [ref=e186]:
+              - img [ref=e187]
+              - text: "4.9"
+            - generic [ref=e189]:
+              - img [ref=e190]
+              - text: 47.1k
+          - generic [ref=e193]:
+            - generic [ref=e194]:
+              - generic [ref=e195]: ￥12
+              - generic [ref=e196]: 金币
+              - generic [ref=e197]: ￥19
+            - generic [ref=e198]:
+              - generic [ref=e199]: 👤
+              - generic [ref=e200]: Kevin Cline
+        - generic [ref=e201] [cursor=pointer]:
+          - generic [ref=e203]: ⚡
+          - heading "gate-info-riskcheck" [level=3] [ref=e204]
+          - paragraph [ref=e205]: 代币和合约风险评估：30+项风险检测，包括蜜罐检测、税务分析、持币集中度、命名风险。生成结构化风险报告。只读。
+          - generic [ref=e206]:
+            - generic [ref=e207]: 安全
+            - generic [ref=e208]: 风险
+            - generic [ref=e209]: 蜜罐
+          - generic [ref=e210]:
+            - generic [ref=e211]:
+              - img [ref=e212]
+              - text: "4.1"
+            - generic [ref=e214]:
+              - img [ref=e215]
+              - text: 46.1k
+          - generic [ref=e218]:
+            - generic [ref=e219]:
+              - generic [ref=e220]: ￥79
+              - generic [ref=e221]: 金币
+              - generic [ref=e222]: ￥99
+            - generic [ref=e223]:
+              - generic [ref=e224]: 👤
+              - generic [ref=e225]: Gate.io
+        - generic [ref=e226] [cursor=pointer]:
+          - generic [ref=e228]: ⚡
+          - heading "marketing-mode" [level=3] [ref=e229]
+          - paragraph [ref=e230]: 整合23项综合营销技能，涵盖策略、心理学、内容、SEO、转化优化和付费增长。当用户需要营销策略、文案写作、SEO帮助或转化优化时使用。
+          - generic [ref=e231]:
+            - generic [ref=e232]: 营销
+            - generic [ref=e233]: SEO
+            - generic [ref=e234]: 文案
+          - generic [ref=e235]:
+            - generic [ref=e236]:
+              - img [ref=e237]
+              - text: "4.1"
+            - generic [ref=e239]:
+              - img [ref=e240]
+              - text: 46.1k
+          - generic [ref=e243]:
+            - generic [ref=e244]:
+              - generic [ref=e245]: ￥99
+              - generic [ref=e246]: 金币
+              - generic [ref=e247]: ￥129
+            - generic [ref=e248]:
+              - generic [ref=e249]: 👤
+              - generic [ref=e250]: AgentSkillsHub
+        - generic [ref=e251] [cursor=pointer]:
+          - generic [ref=e253]: ⚡
+          - heading "gate-info-tokenonchain" [level=3] [ref=e254]
+          - paragraph [ref=e255]: 代币链上分析：持币分布、活跃度、大额转账。支持多链查询。只读。
+          - generic [ref=e256]:
+            - generic [ref=e257]: 链上
+            - generic [ref=e258]: 持币
+            - generic [ref=e259]: 大额转账
+          - generic [ref=e260]:
+            - generic [ref=e261]:
+              - img [ref=e262]
+              - text: "4.5"
+            - generic [ref=e264]:
+              - img [ref=e265]
+              - text: 46.0k
+          - generic [ref=e268]:
+            - generic [ref=e269]:
+              - generic [ref=e270]: ￥79
+              - generic [ref=e271]: 金币
+              - generic [ref=e272]: ￥99
+            - generic [ref=e273]:
+              - generic [ref=e274]: 👤
+              - generic [ref=e275]: Gate.io
+        - generic [ref=e276] [cursor=pointer]:
+          - generic [ref=e278]: ⚡
+          - heading "skill-creator" [level=3] [ref=e279]
+          - paragraph [ref=e280]: 创建有效技能的指南。当用户想要创建新技能（或更新现有技能）来扩展Claude的专业知识、工作流或工具集成时使用。
+          - generic [ref=e281]:
+            - generic [ref=e282]: 技能创建
+            - generic [ref=e283]: 开发
+            - generic [ref=e284]: 指南
+          - generic [ref=e285]:
+            - generic [ref=e286]:
+              - img [ref=e287]
+              - text: "4.3"
+            - generic [ref=e289]:
+              - img [ref=e290]
+              - text: 45.9k
+          - generic [ref=e293]:
+            - generic [ref=e294]:
+              - generic [ref=e295]: ￥89
+              - generic [ref=e296]: 金币
+              - generic [ref=e297]: ￥109
+            - generic [ref=e298]:
+              - generic [ref=e299]: 👤
+              - generic [ref=e300]: AgentSkillsHub
+        - generic [ref=e301] [cursor=pointer]:
+          - generic [ref=e303]: ⚡
+          - heading "gate-dex-trade" [level=3] [ref=e304]
+          - paragraph [ref=e305]: Gate DEX 链上代币兑换：支持EVM和Solana链上的Swap执行。MCP+OpenAPI双模式智能路由。三步确认网关（交易对确认→报价→签名）。
+          - generic [ref=e306]:
+            - generic [ref=e307]: DEX
+            - generic [ref=e308]: Swap
+            - generic [ref=e309]: 交易
+          - generic [ref=e310]:
+            - generic [ref=e311]:
+              - img [ref=e312]
+              - text: "4.0"
+            - generic [ref=e314]:
+              - img [ref=e315]
+              - text: 45.8k
+          - generic [ref=e318]:
+            - generic [ref=e319]:
+              - generic [ref=e320]: ￥159
+              - generic [ref=e321]: 金币
+              - generic [ref=e322]: ￥209
+            - generic [ref=e323]:
+              - generic [ref=e324]: 👤
+              - generic [ref=e325]: Gate.io
+        - generic [ref=e326] [cursor=pointer]:
+          - generic [ref=e328]: ⚡
+          - heading "markdown-converter" [level=3] [ref=e329]
+          - paragraph [ref=e330]: 使用markitdown将文档和文件转换为Markdown格式。支持PDF、Word、PowerPoint、Excel、HTML、CSV、JSON、XML、图片、音频、ZIP、YouTube URL和EPub。
+          - generic [ref=e331]:
+            - generic [ref=e332]: Markdown
+            - generic [ref=e333]: 文档转换
+            - generic [ref=e334]: PDF
+          - generic [ref=e335]:
+            - generic [ref=e336]:
+              - img [ref=e337]
+              - text: "4.8"
+            - generic [ref=e339]:
+              - img [ref=e340]
+              - text: 45.7k
+          - generic [ref=e343]:
+            - generic [ref=e344]:
+              - generic [ref=e345]: ￥79
+              - generic [ref=e346]: 金币
+              - generic [ref=e347]: ￥99
+            - generic [ref=e348]:
+              - generic [ref=e349]: 👤
+              - generic [ref=e350]: AgentSkillsHub
+        - generic [ref=e351] [cursor=pointer]:
+          - generic [ref=e353]: ⚡
+          - heading "migration-auditor" [level=3] [ref=e354]
+          - paragraph [ref=e355]: 在数据库迁移进入生产环境之前捕获危险操作。审查 PostgreSQL、MySQL 和 SQLite 的 Schema 变更，检测锁表风险、数据丢失隐患、缺失的回滚脚本和索引问题。提供安全的迁移策略建议和分阶段执行计划。
+          - generic [ref=e356]:
+            - generic [ref=e357]: database
+            - generic [ref=e358]: migrations
+            - generic [ref=e359]: postgresql
+          - generic [ref=e360]:
+            - generic [ref=e361]:
+              - img [ref=e362]
+              - text: "4.5"
+            - generic [ref=e364]:
+              - img [ref=e365]
+              - text: 44.1k
+          - generic [ref=e368]:
+            - generic [ref=e369]:
+              - generic [ref=e370]: ￥5
+              - generic [ref=e371]: 金币
+              - generic [ref=e372]: ￥9
+            - generic [ref=e373]:
+              - generic [ref=e374]: 👤
+              - generic [ref=e375]: Roy Yuen
+        - generic [ref=e376] [cursor=pointer]:
+          - generic [ref=e378]: ⚡
+          - heading "db-schema" [level=3] [ref=e379]
+          - paragraph [ref=e380]: 将自然语言应用描述转化为完全规范化的 SQL Schema 和实体关系文档。支持 PostgreSQL、MySQL 和 SQLite。自动设计表结构、外键关系、索引策略和数据类型选择。生成包含 ER 图描述的完整数据库设计文档。
+          - generic [ref=e381]:
+            - generic [ref=e382]: database-design
+            - generic [ref=e383]: sql
+            - generic [ref=e384]: postgresql
+          - generic [ref=e385]:
+            - generic [ref=e386]:
+              - img [ref=e387]
+              - text: "4.3"
+            - generic [ref=e389]:
+              - img [ref=e390]
+              - text: 44.1k
+          - generic [ref=e393]:
+            - generic [ref=e394]:
+              - generic [ref=e395]: ￥12
+              - generic [ref=e396]: 金币
+              - generic [ref=e397]: ￥19
+            - generic [ref=e398]:
+              - generic [ref=e399]: 👤
+              - generic [ref=e400]: Kevin Cline
+      - generic [ref=e401]:
+        - button "上一页" [disabled] [ref=e402]
+        - button "1" [ref=e404] [cursor=pointer]
+        - button "2" [ref=e406] [cursor=pointer]
+        - button "3" [ref=e408] [cursor=pointer]
+        - generic [ref=e409]:
+          - text: ...
+          - button "15" [ref=e410] [cursor=pointer]
+        - button "下一页" [ref=e411] [cursor=pointer]
+  - generic [ref=e94] [cursor=pointer]:
+    - img [ref=e95]
+    - generic: AI 导购助手
+  - generic [ref=e413]:
+    - button [ref=e414] [cursor=pointer]:
+      - img [ref=e415]
+    - generic [ref=e418]:
+      - heading "登录" [level=2] [ref=e441]
+      - paragraph [ref=e420]: 登录你的 SkillBazaar 账户
+    - generic [ref=e421]:
+      - generic [ref=e422]:
+        - generic [ref=e423]:
+          - img [ref=e424]
+          - text: 用户名
+        - textbox "输入用户名" [ref=e427]: testuser
+      - generic [ref=e431]:
+        - generic [ref=e432]:
+          - img [ref=e433]
+          - text: 密码
+        - textbox "输入密码" [ref=e436]: "123456"
+      - button "登录" [ref=e442] [cursor=pointer]
+      - generic [ref=e439]:
+        - text: 没有账户？
+        - button "注册" [ref=e443] [cursor=pointer]

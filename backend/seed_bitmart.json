@@ -1,0 +1,30 @@
+[
+  {
+    "name": "bitmart-exchange-spot",
+    "display_name": "BitMart 现货交易",
+    "description": "BitMart 现货交易技能，支持买卖加密货币、限价/市价单、批量下单、订单管理（取消/查询）、账户余额查询、杠杆交易及费率查询。所有下单操作均需用户明确确认。覆盖34个API端点，包括市场数据、账户查询、交易下单、保证金借贷等完整现货交易功能。",
+    "category": "Skill",
+    "sub_category": "现货交易",
+    "price": 99,
+    "original_price": 129,
+    "seller_name": "BitMart",
+    "source_platform": "BitMart Skills",
+    "github_url": "https://github.com/bitmartexchange/bitmart-skills/tree/master/skills/bitmart-exchange-spot",
+    "tags": ["交易", "现货", "加密货币", "BitMart", "买卖", "订单管理", "余额查询", "杠杆"],
+    "content_preview": "---\nname: bitmart-exchange-spot\ndescription: \"Use when the user asks about BitMart spot trading, including buying or selling crypto, placing limit or market orders, checking spot balance, querying open orders, viewing trade history, or managing margin positions. Do NOT use for futures/contract trading (use bitmart-exchange-futures).\"\nhomepage: \"https://www.bitmart.com\"\nmetadata: {\"author\":\"bitmart\",\"version\":\"2026.3.23\",\"sdk_version\":\"1.4.0\",\"updated\":\"2026-03-23\"}\n---\n# BitMart Spot Trading\n## Overview\n| # | Category | API Endpoint | Type | Description |\n|---|----------|-------------|------|-------------|\n| 1 | Market Data | `GET /spot/quotation/v3/ticker` | READ | Get single pair ticker |\n| 2 | Market Data | `GET /spot/quotation/v3/tickers` | READ | Get all pair tickers |\n| 3 | Market Data | `GET /spot/quotation/v3/books` | READ | Order book depth (max 50) |\n| 4 | Market Data | `GET /spot/quotation/v3/trades` | READ | Recent public trades (max 50) |\n| 5 | Market Data | `GET /spot/quotation/v3/klines` | READ | Historical K-line/candlestick |\n| 6 | Market Data | `GET /spot/quotation/v3/lite-klines` | READ | Latest K-line data |\n| 7 | Market Data | `GET /spot/v1/symbols/details` | READ | Trading pair details |\n| 8 | Market Data | `GET /spot/v1/symbols` | READ | Trading pair list |\n| 9 | Market Data | `GET /spot/v1/currencies` | READ | All supported currencies |\n| 10 | Account | `GET /account/v1/wallet` | READ | Account balance (all wallets) |\n| 11 | Account | `GET /spot/v1/wallet` | READ | Spot wallet balance |\n| 12 | Account | `GET /spot/v1/trade_fee` | READ | Actual trade fee rate |\n| 13 | Account | `GET /spot/v1/user_fee` | READ | Base fee rate (account tier) |\n| 14 | Margin Account | `GET /spot/v1/margin/isolated/account` | READ | Isolated margin account details |"
+  },
+  {
+    "name": "bitmart-exchange-futures",
+    "display_name": "BitMart 合约交易",
+    "description": "BitMart USDT永续合约交易技能，支持开仓/平仓、杠杆管理、计划（条件）单、止盈止损、追踪订单、仓位模式切换、子账户转账、返佣查询及模拟交易。覆盖53个API端点，包括市场数据、账户查询、交易下单、计划单、止盈止损、追踪单、订单查询等完整合约交易功能。",
+    "category": "Skill",
+    "sub_category": "合约交易",
+    "price": 99,
+    "original_price": 129,
+    "seller_name": "BitMart",
+    "source_platform": "BitMart Skills",
+    "github_url": "https://github.com/bitmartexchange/bitmart-skills/tree/master/skills/bitmart-exchange-futures",
+    "tags": ["交易", "合约", "期货", "杠杆", "止盈止损", "计划单", "追踪单", "加密货币", "BitMart"],
+    "content_preview": "---\nname: bitmart-exchange-futures\ndescription: \"Use when the user asks about BitMart futures or contract trading, including opening/closing positions, setting leverage, placing plan (conditional) orders, take-profit/stop-loss, trailing orders, checking futures positions, managing futures account, sub-account transfers, affiliate/rebate queries, or simulated trading. Do NOT use for spot trading (use bitmart-exchange-spot).\"\nhomepage: \"https://www.bitmart.com\"\nmetadata: {\"author\":\"bitmart\",\"version\":\"2026.3.23\",\"sdk_version\":\"1.4.0\",\"updated\":\"2026-03-23\"}\n---\n# BitMart Futures Trading\n## Overview\n53 endpoints total. Table:\n| # | Category | API Endpoint | Type | Description |\n|---|----------|-------------|------|-------------|\n| 1 | Market Data | `GET /contract/public/details` | READ | Contract specifications |\n| 2 | Market Data | `GET /contract/public/depth` | READ | Order book |\n| 3 | Market Data | `GET /contract/public/market-trade` | READ | Recent trades (max 100) |\n| 4 | Market Data | `GET /contract/public/funding-rate` | READ | Current funding rate |\n| 5 | Market Data | `GET /contract/public/funding-rate-history` | READ | Historical funding rates |\n| 6 | Market Data | `GET /contract/public/kline` | READ | K-line (steps: 1,3,5,15,30,60,120,240,360,720,1440,4320,10080) |\n| 7 | Market Data | `GET /contract/public/markprice-kline` | READ | Mark price K-line |\n| 8 | Market Data | `GET /contract/public/open-interest` | READ | Open interest |\n| 9 | Market Data | `GET /contract/public/leverage-bracket` | READ | Leverage tiers / risk limits |\n| 10 | Account | `GET /contract/private/assets-detail` | READ | Futures account balance |\n| 11 | Account | `GET /contract/private/trade-fee-rate` | READ | Trade fee rate |\n| 12 | Account | `GET /contract/private/position` | READ | Current positions |\n| 13 | Account | `GET /contract/private/position-v2` | READ | Positions (extended info) |\n| 14 | Account | `GET /contract/private/position-risk` | READ | Position risk / liquidation |"
+  }
+]

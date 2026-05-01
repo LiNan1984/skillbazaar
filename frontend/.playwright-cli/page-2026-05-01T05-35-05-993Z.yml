@@ -1,0 +1,190 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: 10,000
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "卖家中心" [ref=e438] [cursor=pointer]:
+          - img [ref=e439]
+          - generic [ref=e444]: 卖家中心
+        - button "我的库" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e24]: 我的库
+        - button "钱包" [ref=e445] [cursor=pointer]:
+          - img [ref=e446]
+          - generic [ref=e29]: 钱包
+        - generic [ref=e449]: 测试用户
+        - button "退出" [ref=e450] [cursor=pointer]:
+          - img [ref=e451]
+          - generic [ref=e454]: 退出
+  - main [ref=e35]:
+    - generic [ref=e455]:
+      - generic [ref=e456]:
+        - link "首页" [ref=e457] [cursor=pointer]:
+          - /url: /
+          - img [ref=e458]
+          - text: 首页
+        - img [ref=e461]
+        - link "Skill" [ref=e463] [cursor=pointer]:
+          - /url: /?category=Skill
+        - img [ref=e464]
+        - generic [ref=e466]: prompt-engineering-expert
+      - generic [ref=e467]:
+        - generic [ref=e468]:
+          - generic [ref=e469]:
+            - generic [ref=e470]: ⚡
+            - generic [ref=e471]:
+              - heading "prompt-engineering-expert" [level=1] [ref=e473]
+              - generic [ref=e474]:
+                - generic [ref=e475]: Skill
+                - generic [ref=e476]:
+                  - img [ref=e477]
+                  - text: "4.2"
+                - generic [ref=e479]:
+                  - img [ref=e480]
+                  - text: 49984 次下载
+                - generic [ref=e483]:
+                  - img [ref=e484]
+                  - text: 443 次销售
+          - generic [ref=e488]:
+            - img [ref=e489]
+            - generic [ref=e492]: 提示工程
+            - generic [ref=e493]: AI
+            - generic [ref=e494]: 优化
+            - generic [ref=e495]: LLM
+          - generic [ref=e496]:
+            - heading "商品描述" [level=2] [ref=e497]
+            - paragraph [ref=e498]: 提示工程、自定义指令设计和AI智能体提示优化的高级专家。
+          - generic [ref=e499]:
+            - heading "内容预览" [level=2] [ref=e500]
+            - code [ref=e503]: 提示工程和AI智能体提示优化的高级专家
+          - generic [ref=e504]:
+            - heading "体验技能" [level=2] [ref=e505]
+            - paragraph [ref=e506]: 输入参数，体验这个技能的效果（免费试用 3 次）
+            - textbox "输入体验参数，如：分析 BTC 行情趋势" [ref=e507]
+            - button "运行技能" [disabled] [ref=e508]
+        - generic [ref=e509]:
+          - generic [ref=e510]:
+            - generic [ref=e511]: ￥89
+            - generic [ref=e512]: 金币
+            - generic [ref=e513]: ￥109
+          - generic [ref=e514]:
+            - generic [ref=e515]:
+              - img [ref=e516]
+              - text: 4.2 评分
+            - generic [ref=e518]:
+              - img [ref=e519]
+              - text: 49984 下载
+          - generic [ref=e523]:
+            - generic [ref=e524]: 账户余额
+            - generic [ref=e525]: ￥10,000 金币
+          - button "立即购买 · ￥89 金币" [ref=e526] [cursor=pointer]
+        - generic [ref=e527]:
+          - heading "相关推荐" [level=2] [ref=e528]
+          - generic [ref=e529]:
+            - generic [ref=e530] [cursor=pointer]:
+              - generic [ref=e532]: ⚡
+              - heading "gate-exchange-subaccount" [level=3] [ref=e533]
+              - paragraph [ref=e534]: Gate 子账户管理：按UID查询状态、列出所有子账户、创建子账户、锁定/解锁。写操作需用户确认。
+              - generic [ref=e535]:
+                - generic [ref=e536]: 子账户
+                - generic [ref=e537]: 管理
+                - generic [ref=e538]: UID
+              - generic [ref=e539]:
+                - generic [ref=e540]:
+                  - img [ref=e541]
+                  - text: "4.9"
+                - generic [ref=e543]:
+                  - img [ref=e544]
+                  - text: 49.8k
+              - generic [ref=e547]:
+                - generic [ref=e548]:
+                  - generic [ref=e549]: ￥69
+                  - generic [ref=e550]: 金币
+                  - generic [ref=e551]: ￥89
+                - generic [ref=e552]:
+                  - generic [ref=e553]: 👤
+                  - generic [ref=e554]: Gate.io
+            - generic [ref=e555] [cursor=pointer]:
+              - generic [ref=e557]: ⚡
+              - heading "rag-architect" [level=3] [ref=e558]
+              - paragraph [ref=e559]: 设计、调试和优化生产级 RAG（检索增强生成）系统。提供专家级架构建议、混合搜索策略和知识库质量优化方案。涵盖向量数据库选型、嵌入模型调优、检索策略设计和答案生成优化等关键环节。
+              - generic [ref=e560]:
+                - generic [ref=e561]: rag
+                - generic [ref=e562]: vector-databases
+                - generic [ref=e563]: search-relevancy
+              - generic [ref=e564]:
+                - generic [ref=e565]:
+                  - img [ref=e566]
+                  - text: "4.5"
+                - generic [ref=e568]:
+                  - img [ref=e569]
+                  - text: 49.0k
+              - generic [ref=e572]:
+                - generic [ref=e573]:
+                  - generic [ref=e574]: ￥5
+                  - generic [ref=e575]: 金币
+                  - generic [ref=e576]: ￥9
+                - generic [ref=e577]:
+                  - generic [ref=e578]: 👤
+                  - generic [ref=e579]: Roy Yuen
+            - generic [ref=e580] [cursor=pointer]:
+              - generic [ref=e582]: ⚡
+              - heading "dockerfile-gen" [level=3] [ref=e583]
+              - paragraph [ref=e584]: 即时生成优化的多阶段 Dockerfile 和 docker-compose 配置文件。支持 Go、Rust、Node.js、Python、Java 等语言的多阶段构建，自动检测框架、依赖和运行时需求。生成包含健康检查、非 root 用户和安全最佳实践的生产级容器配置。
+              - generic [ref=e585]:
+                - generic [ref=e586]: docker
+                - generic [ref=e587]: devops
+                - generic [ref=e588]: containerization
+              - generic [ref=e589]:
+                - generic [ref=e590]:
+                  - img [ref=e591]
+                  - text: "4.9"
+                - generic [ref=e593]:
+                  - img [ref=e594]
+                  - text: 47.1k
+              - generic [ref=e597]:
+                - generic [ref=e598]:
+                  - generic [ref=e599]: ￥12
+                  - generic [ref=e600]: 金币
+                  - generic [ref=e601]: ￥19
+                - generic [ref=e602]:
+                  - generic [ref=e603]: 👤
+                  - generic [ref=e604]: Kevin Cline
+            - generic [ref=e605] [cursor=pointer]:
+              - generic [ref=e607]: ⚡
+              - heading "gate-info-riskcheck" [level=3] [ref=e608]
+              - paragraph [ref=e609]: 代币和合约风险评估：30+项风险检测，包括蜜罐检测、税务分析、持币集中度、命名风险。生成结构化风险报告。只读。
+              - generic [ref=e610]:
+                - generic [ref=e611]: 安全
+                - generic [ref=e612]: 风险
+                - generic [ref=e613]: 蜜罐
+              - generic [ref=e614]:
+                - generic [ref=e615]:
+                  - img [ref=e616]
+                  - text: "4.1"
+                - generic [ref=e618]:
+                  - img [ref=e619]
+                  - text: 46.1k
+              - generic [ref=e622]:
+                - generic [ref=e623]:
+                  - generic [ref=e624]: ￥79
+                  - generic [ref=e625]: 金币
+                  - generic [ref=e626]: ￥99
+                - generic [ref=e627]:
+                  - generic [ref=e628]: 👤
+                  - generic [ref=e629]: Gate.io
+  - generic [ref=e94] [cursor=pointer]:
+    - img [ref=e95]
+    - generic: AI 导购助手

@@ -1,0 +1,69 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: 9,842
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "卖家中心" [ref=e438] [cursor=pointer]:
+          - img [ref=e439]
+          - generic [ref=e444]: 卖家中心
+        - button "我的库" [active] [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e24]: 我的库
+        - button "钱包" [ref=e445] [cursor=pointer]:
+          - img [ref=e446]
+          - generic [ref=e29]: 钱包
+        - generic [ref=e449]: 测试用户
+        - button "退出" [ref=e450] [cursor=pointer]:
+          - img [ref=e451]
+          - generic [ref=e454]: 退出
+  - main [ref=e35]:
+    - generic [ref=e455]:
+      - heading "我的库" [level=1] [ref=e456]:
+        - img [ref=e457]
+        - text: 我的库
+      - generic [ref=e461]:
+        - generic [ref=e462] [cursor=pointer]:
+          - generic [ref=e463]:
+            - img [ref=e464]
+            - text: 已购买
+          - generic [ref=e467]:
+            - generic [ref=e468]: ⚡
+            - heading "gate-exchange-subaccount" [level=3] [ref=e469]
+          - paragraph [ref=e470]: Gate 子账户管理：按UID查询状态、列出所有子账户、创建子账户、锁定/解锁。写操作需用户确认。
+          - generic [ref=e471]:
+            - generic [ref=e472]:
+              - img [ref=e473]
+              - text: 2026/5/1
+            - generic [ref=e475]:
+              - img [ref=e476]
+              - text: 69 金币
+        - generic [ref=e481] [cursor=pointer]:
+          - generic [ref=e482]:
+            - img [ref=e483]
+            - text: 已购买
+          - generic [ref=e486]:
+            - generic [ref=e487]: ⚡
+            - heading "prompt-engineering-expert" [level=3] [ref=e488]
+          - paragraph [ref=e489]: 提示工程、自定义指令设计和AI智能体提示优化的高级专家。
+          - generic [ref=e490]:
+            - generic [ref=e491]:
+              - img [ref=e492]
+              - text: 2026/5/1
+            - generic [ref=e494]:
+              - img [ref=e495]
+              - text: 89 金币
+  - generic [ref=e94] [cursor=pointer]:
+    - img [ref=e95]
+    - generic: AI 导购助手

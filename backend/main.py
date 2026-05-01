@@ -1,0 +1,60 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+import database
+from routers import products, users, transactions, chat
+from routers.sync import router as sync_router
+from routers.skills import router as skills_router
+from routers.user_v2 import router as user_v2_router
+from routers.bounties import router as bounties_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.init_db()
+    yield
+
+
+app = FastAPI(
+    title="SkillBazaar API",
+    description="AI Agent/Skill/Cron Marketplace Backend",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(products.router)
+app.include_router(users.router)
+app.include_router(transactions.router)
+app.include_router(chat.router)
+app.include_router(sync_router)
+app.include_router(skills_router)
+app.include_router(user_v2_router)
+app.include_router(bounties_router)
+
+
+@app.get("/")
+async def root():
+    return {
+        "name": "SkillBazaar API",
+        "version": "1.0.0",
+        "description": "AI Agent/Skill/Cron Marketplace",
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

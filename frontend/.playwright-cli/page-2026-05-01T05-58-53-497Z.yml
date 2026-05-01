@@ -1,0 +1,93 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: 9,842
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "卖家中心" [ref=e438] [cursor=pointer]:
+          - img [ref=e439]
+          - generic [ref=e444]: 卖家中心
+        - button "我的库" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e24]: 我的库
+        - button "钱包" [ref=e445] [cursor=pointer]:
+          - img [ref=e446]
+          - generic [ref=e29]: 钱包
+        - generic [ref=e449]: 测试用户
+        - button "退出" [ref=e450] [cursor=pointer]:
+          - img [ref=e451]
+          - generic [ref=e454]: 退出
+  - main [ref=e35]:
+    - generic [ref=e681]:
+      - heading "我的库" [level=1] [ref=e682]:
+        - img [ref=e683]
+        - text: 我的库
+      - generic [ref=e687]:
+        - generic [ref=e688] [cursor=pointer]:
+          - generic [ref=e689]:
+            - img [ref=e690]
+            - text: 已购买
+          - generic [ref=e693]:
+            - generic [ref=e694]: ⚡
+            - heading "gate-exchange-subaccount" [level=3] [ref=e695]
+          - paragraph [ref=e696]: Gate 子账户管理：按UID查询状态、列出所有子账户、创建子账户、锁定/解锁。写操作需用户确认。
+          - generic [ref=e697]:
+            - generic [ref=e698]:
+              - img [ref=e699]
+              - text: 2026/5/1
+            - generic [ref=e701]:
+              - img [ref=e702]
+              - text: 69 金币
+        - generic [ref=e707] [cursor=pointer]:
+          - generic [ref=e708]:
+            - img [ref=e709]
+            - text: 已购买
+          - generic [ref=e712]:
+            - generic [ref=e713]: ⚡
+            - heading "prompt-engineering-expert" [level=3] [ref=e714]
+          - paragraph [ref=e715]: 提示工程、自定义指令设计和AI智能体提示优化的高级专家。
+          - generic [ref=e716]:
+            - generic [ref=e717]:
+              - img [ref=e718]
+              - text: 2026/5/1
+            - generic [ref=e720]:
+              - img [ref=e721]
+              - text: 89 金币
+  - generic [ref=e94] [cursor=pointer]:
+    - img [ref=e95]
+    - generic: AI 导购助手
+  - generic [ref=e726]:
+    - generic [ref=e727]:
+      - generic [ref=e728]:
+        - generic [ref=e729]: 🤖
+        - generic [ref=e730]:
+          - generic [ref=e731]: 小B Skill助手
+          - generic [ref=e732]: 在线
+      - button [ref=e734] [cursor=pointer]:
+        - img [ref=e735]
+    - generic [ref=e739]:
+      - generic [ref=e740]: 🤖
+      - paragraph [ref=e742]: 您好！我是您的AI导购助手。想找哪类商品？可以直接告诉我，比如"我想买个交易类的Skill"
+    - generic [ref=e743]:
+      - button "🤖 Agent" [ref=e744] [cursor=pointer]
+      - button "⚡ Skill" [ref=e745] [cursor=pointer]
+      - button "⏰ Cron" [ref=e746] [cursor=pointer]
+      - button "🔄 Workflow" [ref=e747] [cursor=pointer]
+      - button "🔥 热门" [ref=e748] [cursor=pointer]
+      - button "💰 便宜" [ref=e749] [cursor=pointer]
+    - generic [ref=e750]:
+      - textbox "输入您的问题..." [active] [ref=e751]
+      - button [disabled] [ref=e752]:
+        - img [ref=e753]
+    - generic [ref=e756]: 回复内容由 AI 助手生成，仅供参考

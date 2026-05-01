@@ -1,0 +1,84 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: "0"
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "我的库" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e24]: 我的库
+        - button "登录" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - generic [ref=e29]: 登录
+        - button "注册" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+          - generic [ref=e34]: 注册
+  - main [ref=e35]:
+    - generic [ref=e37]:
+      - generic [ref=e38]: 多平台商品聚合
+      - heading "AI Agent · Skill · Cron 智能交易市场" [level=1] [ref=e40]:
+        - text: AI Agent · Skill · Cron
+        - text: 智能交易市场
+      - paragraph [ref=e41]: 发现、购买和发布 AI 智能体技能包，汇聚多个来源平台的优质商品
+      - generic [ref=e42]:
+        - button "探索市场" [ref=e43] [cursor=pointer]
+        - button "发布商品" [ref=e44] [cursor=pointer]
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e47]: 97+
+          - generic [ref=e48]: 优质商品
+        - generic [ref=e50]:
+          - generic [ref=e51]: 4+
+          - generic [ref=e52]: 来源平台
+        - generic [ref=e54]:
+          - generic [ref=e55]: 10,000
+          - generic [ref=e56]: 虚拟币赠送
+    - generic [ref=e59]:
+      - button "全部" [ref=e60] [cursor=pointer]
+      - button "🤖 Agent" [ref=e61] [cursor=pointer]:
+        - generic [ref=e62]: 🤖
+        - text: Agent
+      - button "⚡ Skill" [ref=e63] [cursor=pointer]:
+        - generic [ref=e64]: ⚡
+        - text: Skill
+      - button "⏰ Cron" [ref=e65] [cursor=pointer]:
+        - generic [ref=e66]: ⏰
+        - text: Cron
+      - button "🔄 Workflow" [ref=e67] [cursor=pointer]:
+        - generic [ref=e68]: 🔄
+        - text: Workflow
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - text: 共
+        - strong [ref=e72]: "0"
+        - text: 个商品
+      - generic [ref=e73]:
+        - button "热门" [ref=e74] [cursor=pointer]:
+          - img [ref=e75]
+          - text: 热门
+        - button "最新" [ref=e78] [cursor=pointer]:
+          - img [ref=e79]
+          - text: 最新
+        - button "价格↑" [ref=e82] [cursor=pointer]:
+          - img [ref=e83]
+          - text: 价格↑
+        - button "价格↓" [ref=e86] [cursor=pointer]:
+          - img [ref=e87]
+          - text: 价格↓
+        - button "评分" [ref=e90] [cursor=pointer]:
+          - img [ref=e91]
+          - text: 评分
+  - generic [ref=e94] [cursor=pointer]:
+    - img [ref=e95]
+    - generic: AI 导购助手

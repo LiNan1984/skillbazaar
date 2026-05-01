@@ -1,0 +1,34 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: 🏪
+        - generic [ref=e8]: SkillBazaar
+      - generic [ref=e9]:
+        - img
+        - textbox "搜索 Agent、Skill、Cron..." [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e16]: 💰
+          - generic [ref=e17]: "0"
+        - button "发布商品" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+          - generic [ref=e20]: 发布商品
+        - button "卖家中心" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e27]: 卖家中心
+        - button "我的库" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - generic [ref=e31]: 我的库
+        - button "钱包" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - generic [ref=e36]: 钱包
+        - generic [ref=e37]: 测试用户
+        - button "退出" [ref=e38] [cursor=pointer]:
+          - img [ref=e39]
+          - generic [ref=e42]: 退出
+  - main [ref=e43]
+  - generic [ref=e44] [cursor=pointer]:
+    - img [ref=e45]
+    - generic: AI 导购助手
