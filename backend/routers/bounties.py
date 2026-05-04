@@ -112,6 +112,32 @@ async def my_applied_bounties(user_id: str, authorization: str = Header(None)):
     return {"bounties": bounties, "total": total}
 
 
+@router.delete("/{bounty_id}")
+async def delete_bounty(bounty_id: int, token: str = Header(None, alias="Authorization")):
+    bounty = await get_bounty_detail(bounty_id)
+    if not bounty:
+        raise HTTPException(404, "悬赏不存在")
+    user = None
+    if token:
+        token_clean = token.replace("Bearer ", "") if token.startswith("Bearer ") else token
+        user = await db.fetch_user_by_token(token_clean)
+    if not user:
+        raise HTTPException(401, "未登录")
+    is_admin = user.get("role") == "admin"
+    is_poster = bounty.get("poster_id") == user["id"]
+    if not is_admin and not is_poster:
+        raise HTTPException(403, "无权删除")
+    database_conn = await db.get_db()
+    try:
+        await database_conn.execute("DELETE FROM bounty_applications WHERE bounty_id = ?", (bounty_id,))
+        await database_conn.execute("DELETE FROM bounty_deliveries WHERE bounty_id = ?", (bounty_id,))
+        await database_conn.execute("DELETE FROM bounties WHERE id = ?", (bounty_id,))
+        await database_conn.commit()
+    finally:
+        await database_conn.close()
+    return {"ok": True}
+
+
 async def _resolve_user(authorization: str | None) -> str | None:
     if not authorization:
         return None

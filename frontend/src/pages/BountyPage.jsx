@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Search, Filter, Clock, DollarSign, Users, ChevronRight } from 'lucide-react'
-import { getBounties, createBounty } from '../services/api'
+import { Plus, Search, Filter, Clock, DollarSign, Users, ChevronRight, Trash2 } from 'lucide-react'
+import { getBounties, createBounty, deleteBounty } from '../services/api'
 
 const STATUS_MAP = {
   open: { label: '招募中', color: '#22c55e' },
@@ -48,6 +48,18 @@ export default function BountyPage({ userId, authToken }) {
       loadBounties()
     } catch (err) {
       alert(err.detail || err.message || '创建失败')
+    }
+  }
+
+  const handleDelete = async (e, bountyId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('确定删除此悬赏？')) return
+    try {
+      await deleteBounty(bountyId, authToken)
+      loadBounties()
+    } catch (err) {
+      alert(err.detail || err.message || '删除失败')
     }
   }
 
@@ -163,6 +175,12 @@ export default function BountyPage({ userId, authToken }) {
             <Link to={`/bounty/${b.id}`} key={b.id} className="bounty-card">
               <div className="bounty-card-header">
                 <h3>{b.title}</h3>
+                {authToken && b.poster_id === userId && (
+                  <button className="btn btn-ghost btn-sm" style={{ padding: '4px', minWidth: 'auto' }}
+                    title="删除" onClick={(e) => handleDelete(e, b.id)}>
+                    <Trash2 size={16} style={{ color: '#ef4444' }} />
+                  </button>
+                )}
                 <span className="bounty-status" style={{ backgroundColor: STATUS_MAP[b.status]?.color || '#71717a' }}>
                   {STATUS_MAP[b.status]?.label || b.status}
                 </span>

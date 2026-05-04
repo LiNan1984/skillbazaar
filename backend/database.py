@@ -6,7 +6,7 @@ import json
 import random
 from datetime import datetime
 
-DB_PATH = "/Users/linan/Desktop/aicode/skillbazaar/backend/skillbazaar.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "skillbazaar.db")
 
 
 async def get_db() -> aiosqlite.Connection:
@@ -22,6 +22,7 @@ async def init_db():
         await _seed_products(db)
     finally:
         await db.close()
+    await seed_default_activity()
 
 
 async def _create_tables(db: aiosqlite.Connection):
@@ -246,6 +247,150 @@ async def _create_tables(db: aiosqlite.Connection):
             status TEXT DEFAULT 'pending',
             reviewed_at TEXT,
             created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS cron_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            schedule_cron TEXT NOT NULL,
+            webhook_secret TEXT NOT NULL,
+            result_format TEXT DEFAULT 'json',
+            status TEXT DEFAULT 'active',
+            last_executed_at TEXT,
+            avg_duration_ms INTEGER DEFAULT 0,
+            subscriber_count INTEGER DEFAULT 0,
+            execution_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS cron_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cron_product_id INTEGER NOT NULL,
+            subscriber_id TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            subscribed_at TEXT DEFAULT (datetime('now')),
+            expires_at TEXT,
+            monthly_price INTEGER DEFAULT 0,
+            webhook_url TEXT,
+            api_token TEXT UNIQUE,
+            last_result_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (cron_product_id) REFERENCES cron_products(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS cron_execution_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cron_product_id INTEGER NOT NULL,
+            subscription_id INTEGER,
+            payload TEXT,
+            status TEXT DEFAULT 'success',
+            executed_at TEXT DEFAULT (datetime('now')),
+            duration_ms INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS cron_webhook_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            execution_log_id INTEGER NOT NULL,
+            target_url TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            response_code INTEGER,
+            attempts INTEGER DEFAULT 0,
+            delivered_at TEXT,
+            FOREIGN KEY (execution_log_id) REFERENCES cron_execution_logs(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS point_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL UNIQUE,
+            balance INTEGER DEFAULT 0,
+            total_earned INTEGER DEFAULT 0,
+            total_spent INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1,
+            continuous_checkin_days INTEGER DEFAULT 0,
+            last_checkin_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS activities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            type TEXT DEFAULT 'monthly',
+            start_at TEXT NOT NULL,
+            end_at TEXT NOT NULL,
+            banner_image TEXT,
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id INTEGER NOT NULL,
+            task_key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            task_type TEXT DEFAULT 'monthly',
+            action TEXT NOT NULL,
+            target_count INTEGER DEFAULT 1,
+            reward_points INTEGER DEFAULT 0,
+            reward_coins INTEGER DEFAULT 0,
+            icon TEXT,
+            sort_order INTEGER DEFAULT 0,
+            FOREIGN KEY (activity_id) REFERENCES activities(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_task_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            task_id INTEGER NOT NULL,
+            progress INTEGER DEFAULT 0,
+            completed INTEGER DEFAULT 0,
+            reward_claimed INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, task_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (task_id) REFERENCES activity_tasks(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS point_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            reason TEXT,
+            ref_type TEXT,
+            ref_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_agents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            system_prompt TEXT DEFAULT '',
+            skill_ids TEXT DEFAULT '[]',
+            agent_config TEXT DEFAULT '{}',
+            status TEXT DEFAULT 'active',
+            runs_count INTEGER DEFAULT 0,
+            last_run_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id INTEGER NOT NULL,
+            trigger_type TEXT DEFAULT 'manual',
+            input_text TEXT DEFAULT '',
+            output_text TEXT DEFAULT '',
+            tokens_used INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'success',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (agent_id) REFERENCES user_agents(id)
         );
     """)
     await db.commit()
@@ -1699,5 +1844,653 @@ async def fetch_user_bounties(user_id: str, role: str = "poster") -> tuple[list[
             )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows], len(rows)
+    finally:
+        await db.close()
+
+
+# ---- Cron Subscription Helpers ----
+
+async def insert_cron_product(product_id: int, schedule_cron: str, webhook_secret: str, result_format: str = "json") -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO cron_products (product_id, schedule_cron, webhook_secret, result_format) VALUES (?, ?, ?, ?)",
+            (product_id, schedule_cron, webhook_secret, result_format),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_cron_product(product_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT * FROM cron_products WHERE product_id = ?", (product_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_cron_product_by_id(cron_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT * FROM cron_products WHERE id = ?", (cron_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_my_crons(user_id: str) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            """SELECT cp.* FROM cron_products cp
+            JOIN products p ON cp.product_id = p.id
+            WHERE p.seller_name = (SELECT nickname FROM users WHERE id = ?)
+            ORDER BY cp.created_at DESC""",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def update_cron_product_status(cron_id: int, status: str):
+    db = await get_db()
+    try:
+        await db.execute("UPDATE cron_products SET status = ? WHERE id = ?", (status, cron_id))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def increment_cron_execution(cron_id: int):
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE cron_products SET execution_count = execution_count + 1, last_executed_at = datetime('now') WHERE id = ?",
+            (cron_id,),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def insert_cron_subscription(cron_product_id: int, subscriber_id: str, monthly_price: int, webhook_url: str | None = None) -> dict:
+    import secrets as _secrets
+    api_token = f"cs_{_secrets.token_hex(16)}"
+    from datetime import timedelta
+    expires_at = (datetime.utcnow() + timedelta(days=30)).isoformat()
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO cron_subscriptions (cron_product_id, subscriber_id, monthly_price, webhook_url, api_token, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (cron_product_id, subscriber_id, monthly_price, webhook_url, api_token, expires_at),
+        )
+        await db.commit()
+        await db.execute("UPDATE cron_products SET subscriber_count = subscriber_count + 1 WHERE id = ?", (cron_product_id,))
+        await db.commit()
+        return {"id": cursor.lastrowid, "api_token": api_token, "expires_at": expires_at}
+    finally:
+        await db.close()
+
+
+async def fetch_cron_subscription(sub_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT * FROM cron_subscriptions WHERE id = ?", (sub_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_subscription_by_token(api_token: str) -> dict | None:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT * FROM cron_subscriptions WHERE api_token = ?", (api_token,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_active_subscriptions(cron_product_id: int) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM cron_subscriptions WHERE cron_product_id = ? AND status = 'active'",
+            (cron_product_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def cancel_cron_subscription(sub_id: int):
+    db = await get_db()
+    try:
+        await db.execute("UPDATE cron_subscriptions SET status = 'cancelled' WHERE id = ?", (sub_id,))
+        await db.execute(
+            "UPDATE cron_products SET subscriber_count = subscriber_count - 1 WHERE id = (SELECT cron_product_id FROM cron_subscriptions WHERE id = ?)",
+            (sub_id,),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def update_subscription_last_result(sub_id: int):
+    db = await get_db()
+    try:
+        await db.execute("UPDATE cron_subscriptions SET last_result_at = datetime('now') WHERE id = ?", (sub_id,))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def insert_execution_log(cron_product_id: int, payload: str, status: str, duration_ms: int = 0, subscription_id: int | None = None) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO cron_execution_logs (cron_product_id, subscription_id, payload, status, duration_ms) VALUES (?, ?, ?, ?, ?)",
+            (cron_product_id, subscription_id, payload, status, duration_ms),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_execution_logs(cron_product_id: int, limit: int = 20) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM cron_execution_logs WHERE cron_product_id = ? ORDER BY executed_at DESC LIMIT ?",
+            (cron_product_id, limit),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def fetch_subscription_logs(subscription_id: int, limit: int = 20) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM cron_execution_logs WHERE subscription_id = ? ORDER BY executed_at DESC LIMIT ?",
+            (subscription_id, limit),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def insert_webhook_delivery(execution_log_id: int, target_url: str) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO cron_webhook_deliveries (execution_log_id, target_url) VALUES (?, ?)",
+            (execution_log_id, target_url),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def update_webhook_delivery(delivery_id: int, status: str, response_code: int | None = None):
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE cron_webhook_deliveries SET status = ?, response_code = ?, delivered_at = datetime('now'), attempts = attempts + 1 WHERE id = ?",
+            (status, response_code, delivery_id),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+# ---- Activity & Points Helpers ----
+
+async def get_or_create_point_account(user_id: str) -> dict:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT * FROM point_accounts WHERE user_id = ?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+        cursor = await db.execute("INSERT INTO point_accounts (user_id) VALUES (?)", (user_id,))
+        await db.commit()
+        return {"id": cursor.lastrowid, "user_id": user_id, "balance": 0, "total_earned": 0, "total_spent": 0, "level": 1, "continuous_checkin_days": 0, "last_checkin_at": None}
+    finally:
+        await db.close()
+
+
+async def add_points(user_id: str, amount: int, reason: str, ref_type: str | None = None, ref_id: int | None = None):
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE point_accounts SET balance = balance + ?, total_earned = total_earned + ? WHERE user_id = ?",
+            (amount, amount, user_id),
+        )
+        await db.execute(
+            "INSERT INTO point_transactions (user_id, amount, type, reason, ref_type, ref_id) VALUES (?, ?, 'earn', ?, ?, ?)",
+            (user_id, amount, reason, ref_type, ref_id),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def spend_points(user_id: str, amount: int, reason: str, ref_type: str | None = None, ref_id: int | None = None) -> bool:
+    db = await get_db()
+    try:
+        async with db.execute("SELECT balance FROM point_accounts WHERE user_id = ?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            if not row or dict(row)["balance"] < amount:
+                return False
+        await db.execute(
+            "UPDATE point_accounts SET balance = balance - ?, total_spent = total_spent + ? WHERE user_id = ?",
+            (amount, amount, user_id),
+        )
+        await db.execute(
+            "INSERT INTO point_transactions (user_id, amount, type, reason, ref_type, ref_id) VALUES (?, ?, 'spend', ?, ?, ?)",
+            (-amount, user_id, reason, ref_type, ref_id),
+        )
+        await db.commit()
+        return True
+    finally:
+        await db.close()
+
+
+async def fetch_point_history(user_id: str, limit: int = 50) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM point_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def insert_activity(title: str, description: str, act_type: str, start_at: str, end_at: str) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO activities (title, description, type, start_at, end_at) VALUES (?, ?, ?, ?, ?)",
+            (title, description, act_type, start_at, end_at),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_active_activities() -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM activities WHERE status = 'active' AND end_at > datetime('now') ORDER BY start_at DESC"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def insert_activity_task(activity_id: int, task_key: str, name: str, description: str, task_type: str, action: str, target_count: int, reward_points: int, reward_coins: int = 0, icon: str | None = None, sort_order: int = 0) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT OR IGNORE INTO activity_tasks
+            (activity_id, task_key, name, description, task_type, action, target_count, reward_points, reward_coins, icon, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (activity_id, task_key, name, description, task_type, action, target_count, reward_points, reward_coins, icon, sort_order),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_activity_tasks(activity_id: int) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM activity_tasks WHERE activity_id = ? ORDER BY sort_order", (activity_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def fetch_or_create_task_progress(user_id: str, task_id: int) -> dict:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?",
+            (user_id, task_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+        cursor = await db.execute(
+            "INSERT INTO user_task_progress (user_id, task_id) VALUES (?, ?)",
+            (user_id, task_id),
+        )
+        await db.commit()
+        return {"id": cursor.lastrowid, "user_id": user_id, "task_id": task_id, "progress": 0, "completed": 0, "reward_claimed": 0}
+    finally:
+        await db.close()
+
+
+async def increment_task_progress(user_id: str, action: str):
+    """Auto-increment progress for all active tasks matching the action."""
+    activities = await fetch_active_activities()
+    if not activities:
+        return
+    db = await get_db()
+    try:
+        for act in activities:
+            async with db.execute(
+                "SELECT * FROM activity_tasks WHERE activity_id = ? AND action = ?",
+                (act["id"], action),
+            ) as cursor:
+                tasks = await cursor.fetchall()
+            for t in tasks:
+                t = dict(t)
+                async with db.execute(
+                    "SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?",
+                    (user_id, t["id"]),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                if not row:
+                    await db.execute(
+                        "INSERT INTO user_task_progress (user_id, task_id, progress, completed) VALUES (?, ?, 1, ?)",
+                        (user_id, t["id"], 1 if 1 >= t["target_count"] else 0),
+                    )
+                else:
+                    prog = dict(row)
+                    new_progress = prog["progress"] + 1
+                    completed = 1 if new_progress >= t["target_count"] else 0
+                    await db.execute(
+                        "UPDATE user_task_progress SET progress = ?, completed = ? WHERE user_id = ? AND task_id = ?",
+                        (new_progress, completed, user_id, t["id"]),
+                    )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def claim_task_reward(user_id: str, task_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?",
+            (user_id, task_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if not row:
+            return None
+        prog = dict(row)
+        if not prog["completed"] or prog["reward_claimed"]:
+            return None
+        async with db.execute("SELECT * FROM activity_tasks WHERE id = ?", (task_id,)) as cursor:
+            trow = await cursor.fetchone()
+        if not trow:
+            return None
+        task = dict(trow)
+        await db.execute("UPDATE user_task_progress SET reward_claimed = 1 WHERE user_id = ? AND task_id = ?", (user_id, task_id))
+        await db.commit()
+        if task["reward_points"] > 0:
+            await add_points(user_id, task["reward_points"], "task_reward", "task", task_id)
+        if task["reward_coins"] > 0:
+            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (task["reward_coins"], user_id))
+            await db.commit()
+        return {"points": task["reward_points"], "coins": task["reward_coins"]}
+    finally:
+        await db.close()
+
+
+async def do_checkin(user_id: str) -> dict:
+    """Daily check-in. Returns points earned and streak info."""
+    from datetime import timedelta, timezone
+    tz_cn = timezone(timedelta(hours=8))
+    account = await get_or_create_point_account(user_id)
+    last = account.get("last_checkin_at")
+    now = datetime.now(tz_cn)
+    today = now.strftime("%Y-%m-%d")
+
+    if last and last.startswith(today):
+        return {"ok": False, "message": "今天已经签到过了", "streak": account["continuous_checkin_days"]}
+
+    streak = account["continuous_checkin_days"]
+    if last:
+        try:
+            last_dt = datetime.fromisoformat(last)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=tz_cn)
+            if (now.date() - last_dt.date()).days == 1:
+                streak += 1
+            else:
+                streak = 1
+        except Exception:
+            streak = 1
+    else:
+        streak = 1
+
+    bonus = 50 if streak >= 7 and streak % 7 == 0 else 0
+    points = 10 + bonus
+
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE point_accounts SET last_checkin_at = ?, continuous_checkin_days = ? WHERE user_id = ?",
+            (now.isoformat(), streak, user_id),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    await add_points(user_id, points, "checkin")
+    await increment_task_progress(user_id, "checkin")
+    return {"ok": True, "points": points, "streak": streak, "bonus": bonus}
+
+
+async def update_user_level(user_id: str):
+    account = await get_or_create_point_account(user_id)
+    total = account["total_earned"]
+    level = 1
+    if total >= 15000:
+        level = 5
+    elif total >= 5000:
+        level = 4
+    elif total >= 2000:
+        level = 3
+    elif total >= 500:
+        level = 2
+    db = await get_db()
+    try:
+        await db.execute("UPDATE point_accounts SET level = ? WHERE user_id = ?", (level, user_id))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def seed_default_activity():
+    """Create default monthly activity with tasks if none exists."""
+    activities = await fetch_active_activities()
+    if activities:
+        return
+    now = datetime.utcnow()
+    from datetime import timedelta
+    act_id = await insert_activity(
+        title="五月挑战赛",
+        description="完成每月任务赢取积分和金币奖励！",
+        act_type="monthly",
+        start_at=now.isoformat(),
+        end_at=(now + timedelta(days=30)).isoformat(),
+    )
+    tasks = [
+        ("publish_3_skills", "发布3个Skill", "发布3个Skill获得奖励", "monthly", "publish", 3, 500, 200, "📦"),
+        ("complete_2_bounties", "完成2个悬赏", "完成2个悬赏任务获得奖励", "monthly", "deliver_bounty", 2, 800, 500, "🎯"),
+        ("subscribe_5_crons", "订阅5个Cron", "订阅5个定时任务获得奖励", "monthly", "subscribe_cron", 5, 300, 100, "⏰"),
+        ("receive_5star", "获得5星好评", "获得1个5星好评", "monthly", "receive_5star", 1, 600, 300, "⭐"),
+        ("publish_1_cron", "发布1个Cron", "发布1个定时任务", "monthly", "publish_cron", 1, 400, 150, "🔄"),
+        ("checkin_7", "连续签到7天", "连续签到7天", "monthly", "checkin", 7, 200, 100, "📅"),
+        ("spend_1000", "消费1000金币", "累计消费1000金币", "monthly", "spend", 1000, 500, 200, "💰"),
+    ]
+    for i, (key, name, desc, ttype, action, target, pts, coins, icon) in enumerate(tasks):
+        await insert_activity_task(act_id, key, name, desc, ttype, action, target, pts, coins, icon, i)
+
+
+async def fetch_points_leaderboard(limit: int = 20) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT pa.*, u.nickname FROM point_accounts pa JOIN users u ON pa.user_id = u.id ORDER BY pa.total_earned DESC LIMIT ?",
+            (limit,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def fetch_user_cron_subscriptions(user_id: str) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            """SELECT cs.*, cp.schedule_cron, cp.result_format, cp.execution_count,
+               cp.status as cron_status, p.name as product_name, p.icon as product_icon
+            FROM cron_subscriptions cs
+            JOIN cron_products cp ON cs.cron_product_id = cp.id
+            JOIN products p ON cp.product_id = p.id
+            WHERE cs.subscriber_id = ?
+            ORDER BY cs.subscribed_at DESC""",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+# ---- User Agent Helpers ----
+
+async def insert_user_agent(user_id: str, name: str, description: str, system_prompt: str, skill_ids: list, agent_config: dict | None = None) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO user_agents (user_id, name, description, system_prompt, skill_ids, agent_config) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, name, description, system_prompt, json.dumps(skill_ids), json.dumps(agent_config or {})),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_user_agents(user_id: str) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM user_agents WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def fetch_user_agent(agent_id: int, user_id: str | None = None) -> dict | None:
+    db = await get_db()
+    try:
+        if user_id:
+            async with db.execute("SELECT * FROM user_agents WHERE id = ? AND user_id = ?", (agent_id, user_id)) as cursor:
+                row = await cursor.fetchone()
+        else:
+            async with db.execute("SELECT * FROM user_agents WHERE id = ?", (agent_id,)) as cursor:
+                row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def update_user_agent(agent_id: int, **fields):
+    db = await get_db()
+    try:
+        sets = []
+        vals = []
+        for k, v in fields.items():
+            if k == "skill_ids" and isinstance(v, list):
+                v = json.dumps(v)
+            if k == "agent_config" and isinstance(v, dict):
+                v = json.dumps(v)
+            sets.append(f"{k} = ?")
+            vals.append(v)
+        vals.append(agent_id)
+        await db.execute(f"UPDATE user_agents SET {', '.join(sets)} WHERE id = ?", vals)
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def delete_user_agent(agent_id: int, user_id: str):
+    db = await get_db()
+    try:
+        await db.execute("DELETE FROM user_agents WHERE id = ? AND user_id = ?", (agent_id, user_id))
+        await db.execute("DELETE FROM agent_runs WHERE agent_id = ?", (agent_id,))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def increment_agent_runs(agent_id: int):
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE user_agents SET runs_count = runs_count + 1, last_run_at = datetime('now') WHERE id = ?",
+            (agent_id,),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def insert_agent_run(agent_id: int, trigger_type: str, input_text: str, output_text: str, tokens_used: int = 0, status: str = "success") -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO agent_runs (agent_id, trigger_type, input_text, output_text, tokens_used, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (agent_id, trigger_type, input_text, output_text, tokens_used, status),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_agent_runs(agent_id: int, limit: int = 20) -> list[dict]:
+    db = await get_db()
+    try:
+        async with db.execute(
+            "SELECT * FROM agent_runs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?",
+            (agent_id, limit),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
     finally:
         await db.close()

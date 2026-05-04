@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Home, ChevronRight, Clock, DollarSign, Users, Send, CheckCircle, XCircle } from 'lucide-react'
-import { getBounty, applyForBounty, selectBountyDeveloper, deliverBounty, reviewBountyDelivery } from '../services/api'
+import { Home, ChevronRight, Clock, DollarSign, Users, Send, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { getBounty, applyForBounty, selectBountyDeveloper, deliverBounty, reviewBountyDelivery, deleteBounty } from '../services/api'
 
 const STATUS_MAP = {
   open: { label: '招募中', color: '#22c55e' },
@@ -78,6 +78,16 @@ export default function BountyDetailPage({ userId, authToken }) {
     }
   }
 
+  const handleDeleteBounty = async () => {
+    if (!confirm('确定删除此悬赏？此操作不可恢复。')) return
+    try {
+      await deleteBounty(id, authToken)
+      navigate('/bounties')
+    } catch (err) {
+      alert(err.detail || err.message || '删除失败')
+    }
+  }
+
   if (loading) {
     return <div className="detail-page"><div className="detail-skeleton"><div className="skeleton-line shimmer" style={{ width: '40%', height: '32px' }} /><div className="skeleton-line shimmer" style={{ width: '80%' }} /></div></div>
   }
@@ -111,6 +121,11 @@ export default function BountyDetailPage({ userId, authToken }) {
                 <span className="bounty-type-tag">{bounty.skill_type}</span>
               </div>
             </div>
+            {(isPoster) && authToken && (
+              <button className="btn btn-danger btn-sm" onClick={handleDeleteBounty}>
+                <Trash2 size={14} /> 删除悬赏
+              </button>
+            )}
           </div>
 
           <div className="detail-section">

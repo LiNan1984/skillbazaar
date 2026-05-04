@@ -156,11 +156,13 @@ class TransactionResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     user_id: str
+    card: Optional[dict] = None
 
 
 class ChatResponse(BaseModel):
     reply: str
     products: List[ProductResponse] = []
+    card: Optional[dict] = None
 
 
 # ---------- Filter Models ----------
@@ -424,3 +426,145 @@ class BountyAcceptRequest(BaseModel):
 class BountyReviewRequest(BaseModel):
     delivery_id: int
     accept: bool
+
+
+# ---------- Cron Subscription Models ----------
+
+class CronProductCreate(BaseModel):
+    product_id: int
+    schedule_cron: str
+    result_format: str = "json"
+
+class CronProductResponse(BaseModel):
+    id: int
+    product_id: int
+    schedule_cron: str
+    result_format: str
+    status: str
+    last_executed_at: Optional[str] = None
+    avg_duration_ms: int = 0
+    subscriber_count: int = 0
+    execution_count: int = 0
+    created_at: Optional[str] = None
+
+class CronSubscriptionResponse(BaseModel):
+    id: int
+    cron_product_id: int
+    subscriber_id: str
+    status: str
+    subscribed_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    monthly_price: int = 0
+    webhook_url: Optional[str] = None
+    api_token: Optional[str] = None
+    last_result_at: Optional[str] = None
+
+class CronPushRequest(BaseModel):
+    payload: str
+    executed_at: Optional[str] = None
+    duration_ms: int = 0
+
+class CronExecutionLogResponse(BaseModel):
+    id: int
+    cron_product_id: int
+    subscription_id: Optional[int] = None
+    payload: Optional[str] = None
+    status: str
+    executed_at: Optional[str] = None
+    duration_ms: int = 0
+
+
+# ---------- Activity & Points Models ----------
+
+class ActivityResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    type: str
+    start_at: str
+    end_at: str
+    status: str
+
+class ActivityTaskResponse(BaseModel):
+    id: int
+    activity_id: int
+    task_key: str
+    name: str
+    description: Optional[str] = None
+    task_type: str
+    action: str
+    target_count: int
+    reward_points: int
+    reward_coins: int
+    icon: Optional[str] = None
+    progress: int = 0
+    completed: bool = False
+    reward_claimed: bool = False
+
+class CheckinResponse(BaseModel):
+    ok: bool
+    message: str = ""
+    points: int = 0
+    streak: int = 0
+    bonus: int = 0
+
+class PointAccountResponse(BaseModel):
+    user_id: str
+    balance: int
+    total_earned: int
+    total_spent: int
+    level: int
+    continuous_checkin_days: int
+    last_checkin_at: Optional[str] = None
+
+class PointRedeemRequest(BaseModel):
+    amount: int = Field(gt=0)
+    redeem_type: str = "coins"
+
+class LeaderboardEntry(BaseModel):
+    user_id: str
+    nickname: Optional[str] = None
+    total_earned: int
+    level: int
+
+
+# ---------- User Agent Models ----------
+
+class UserAgentCreate(BaseModel):
+    name: str
+    description: str = ""
+    system_prompt: str = ""
+    skill_ids: list[int] = []
+
+class UserAgentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: Optional[str] = None
+    skill_ids: Optional[list[int]] = None
+    status: Optional[str] = None
+
+class UserAgentResponse(BaseModel):
+    id: int
+    user_id: str
+    name: str
+    description: str
+    system_prompt: str
+    skill_ids: str
+    agent_config: str
+    status: str
+    runs_count: int = 0
+    last_run_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+class AgentRunRequest(BaseModel):
+    input_text: str = ""
+
+class AgentRunResponse(BaseModel):
+    id: int
+    agent_id: int
+    trigger_type: str
+    input_text: str
+    output_text: str
+    tokens_used: int = 0
+    status: str
+    created_at: Optional[str] = None

@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+
+# Database
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+._*
+
+# Test results
+frontend/test-results/
+
+# Screenshots
+screenshots/
+*.png
+
+# IDE
+.vscode/
+.idea/
+
+# Vite temp
+frontend/node_modules/.vite/deps_temp_*/

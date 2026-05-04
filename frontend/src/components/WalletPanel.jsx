@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
-import { getWalletHistory, rechargeCoins } from '../services/api'
+import { getWalletHistory, rechargeCoins, getMe } from '../services/api'
 
 const TX_TYPE_LABELS = {
   recharge: { label: '充值', icon: ArrowUpCircle, color: '#22c55e' },
@@ -16,10 +16,19 @@ export default function WalletPanel({ onClose, token, coins }) {
   const [page, setPage] = useState(1)
   const [promoCode, setPromoCode] = useState('')
   const [rechargeMsg, setRechargeMsg] = useState('')
+  const [balance, setBalance] = useState(coins || 0)
 
   useEffect(() => {
     loadHistory()
   }, [page])
+
+  useEffect(() => {
+    if (token) {
+      getMe(token)
+        .then((data) => setBalance(data.coins ?? 0))
+        .catch(() => {})
+    }
+  }, [token])
 
   const loadHistory = async () => {
     try {
@@ -38,6 +47,7 @@ export default function WalletPanel({ onClose, token, coins }) {
         setRechargeMsg(`充值成功！+${data.coins_added} 金币`)
         setPromoCode('')
         loadHistory()
+        setBalance(data.new_balance)
       }
     } catch (err) {
       setRechargeMsg(err?.detail || '充值码无效')
@@ -53,7 +63,7 @@ export default function WalletPanel({ onClose, token, coins }) {
           <Wallet size={24} />
           <div>
             <h2>我的钱包</h2>
-            <span className="wallet-balance">余额：¥{coins?.toLocaleString() || 0} 金币</span>
+            <span className="wallet-balance">余额：¥{balance?.toLocaleString() || 0} 金币</span>
           </div>
         </div>
 

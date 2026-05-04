@@ -8,6 +8,10 @@ from routers.sync import router as sync_router
 from routers.skills import router as skills_router
 from routers.user_v2 import router as user_v2_router
 from routers.bounties import router as bounties_router
+from routers.cron import router as cron_router
+from routers.activities import router as activities_router
+from routers.agents import router as agents_router
+from routers.sandbox import router as sandbox_router
 
 
 @asynccontextmanager
@@ -39,6 +43,10 @@ app.include_router(sync_router)
 app.include_router(skills_router)
 app.include_router(user_v2_router)
 app.include_router(bounties_router)
+app.include_router(cron_router)
+app.include_router(activities_router)
+app.include_router(agents_router)
+app.include_router(sandbox_router)
 
 
 @app.get("/")

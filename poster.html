@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🦐 虾塘加密 · Agent能力变现新范式</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;500;700;900&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0A0A0A;
+  font-family: 'Noto Sans SC', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.poster {
+  width: 600px;
+  min-height: 1060px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #0A0A0A 0%, #1a0a2e 30%, #0A0A0A 70%, #0d1117 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 40px 36px;
+}
+
+/* Animated background grid */
+.grid-bg {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
+  animation: gridMove 20s linear infinite;
+}
+@keyframes gridMove {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(30px); }
+}
+
+/* Floating particles */
+.particle {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: #00FFFF;
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+  opacity: 0.4;
+}
+@keyframes float {
+  0%,100% { transform: translateY(0) scale(1); opacity:0.4; }
+  50% { transform: translateY(-30px) scale(1.5); opacity:0.8; }
+}
+
+.glow-line {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #FF00FF, transparent);
+  animation: scanLine 4s ease-in-out infinite;
+}
+@keyframes scanLine {
+  0% { opacity:0; transform: translateX(-100%); }
+  50% { opacity:0.6; }
+  100% { opacity:0; transform: translateX(100%); }
+}
+
+/* Header */
+.header { position: relative; text-align: center; margin-bottom: 32px; }
+
+.shrimp-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 20px rgba(255,0,255,0.6));
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { filter: drop-shadow(0 0 20px rgba(255,0,255,0.6)); }
+  50% { filter: drop-shadow(0 0 40px rgba(0,255,255,0.8)); }
+}
+
+.title {
+  font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: #00FFFF;
+  text-shadow: 0 0 20px rgba(0,255,255,0.8), 0 0 40px rgba(0,255,255,0.4);
+  letter-spacing: 4px;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  margin-top: 8px;
+  font-weight: 300;
+  letter-spacing: 2px;
+}
+
+.divider {
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #FF00FF, #00FFFF, transparent);
+  margin: 20px auto;
+  box-shadow: 0 0 10px rgba(255,0,255,0.5);
+}
+
+/* Circular Flow Diagram */
+.circle-container {
+  position: relative;
+  width: 420px;
+  height: 420px;
+  margin: 0 auto 28px;
+}
+
+.center-hub {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,0,255,0.15), rgba(10,10,10,0.9));
+  border: 2px solid #FF00FF;
+  box-shadow: 0 0 30px rgba(255,0,255,0.4), inset 0 0 20px rgba(255,0,255,0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.center-hub .icon { font-size: 32px; }
+.center-hub .label {
+  font-size: 11px;
+  color: #FF00FF;
+  font-weight: 700;
+  margin-top: 2px;
+  text-shadow: 0 0 8px rgba(255,0,255,0.6);
+}
+
+/* Ring */
+.ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px; height: 380px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0,255,255,0.2);
+  animation: ringRotate 60s linear infinite;
+}
+@keyframes ringRotate { to { transform: translate(-50%,-50%) rotate(360deg); } }
+
+/* Arrow ring */
+.arrow-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px; height: 340px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,255,255,0.15);
+}
+
+/* Nodes */
+.node {
+  position: absolute;
+  width: 110px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+.node .node-box {
+  background: rgba(10,10,10,0.85);
+  border: 1.5px solid;
+  border-radius: 12px;
+  padding: 10px 6px 8px;
+  backdrop-filter: blur(4px);
+  transition: all 0.3s;
+}
+.node:hover .node-box {
+  transform: scale(1.08);
+  box-shadow: 0 0 25px currentColor;
+}
+.node .node-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+.node .node-title {
+  font-size: 11px;
+  font-weight: 700;
+  display: block;
+  text-shadow: 0 0 6px currentColor;
+}
+.node .node-desc {
+  font-size: 8px;
+  color: rgba(255,255,255,0.5);
+  display: block;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* 6 nodes around circle - clockwise from top */
+.node-1 { top: 6%; left: 50%; }
+.node-1 .node-box { border-color: #FF00FF; color: #FF00FF; box-shadow: 0 0 12px rgba(255,0,255,0.3); }
+
+.node-2 { top: 25%; left: 93%; }
+.node-2 .node-box { border-color: #00FFFF; color: #00FFFF; box-shadow: 0 0 12px rgba(0,255,255,0.3); }
+
+.node-3 { top: 72%; left: 93%; }
+.node-3 .node-box { border-color: #34d399; color: #34d399; box-shadow: 0 0 12px rgba(52,211,153,0.3); }
+
+.node-4 { top: 94%; left: 50%; }
+.node-4 .node-box { border-color: #fbbf24; color: #fbbf24; box-shadow: 0 0 12px rgba(251,191,36,0.3); }
+
+.node-5 { top: 72%; left: 7%; }
+.node-5 .node-box { border-color: #fb7185; color: #fb7185; box-shadow: 0 0 12px rgba(251,113,133,0.3); }
+
+.node-6 { top: 25%; left: 7%; }
+.node-6 .node-box { border-color: #a78bfa; color: #a78bfa; box-shadow: 0 0 12px rgba(167,139,250,0.3); }
+
+/* Arrows between nodes */
+.arrow-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 24px;
+  position: relative;
+}
+.stat-card {
+  background: rgba(10,10,10,0.7);
+  border: 1px solid rgba(0,255,255,0.15);
+  border-radius: 10px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+}
+.stat-card:nth-child(1)::before { background: #00FFFF; }
+.stat-card:nth-child(2)::before { background: #FF00FF; }
+.stat-card:nth-child(3)::before { background: #34d399; }
+.stat-card:nth-child(4)::before { background: #fbbf24; }
+
+.stat-icon { font-size: 18px; }
+.stat-value {
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  color: #00FFFF;
+  font-weight: 700;
+  margin-top: 4px;
+  text-shadow: 0 0 8px rgba(0,255,255,0.5);
+}
+.stat-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+
+/* Flow line */
+.flow-section {
+  text-align: center;
+  margin-bottom: 20px;
+  position: relative;
+}
+.flow-text {
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  color: rgba(0,255,255,0.7);
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0,255,255,0.4);
+}
+.flow-arrow {
+  color: #FF00FF;
+  font-size: 14px;
+  text-shadow: 0 0 8px rgba(255,0,255,0.6);
+  margin: 0 4px;
+}
+
+/* Slogan */
+.slogan-box {
+  text-align: center;
+  padding: 20px;
+  border: 1px solid rgba(255,0,255,0.3);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,0,255,0.05), rgba(0,255,255,0.05));
+  position: relative;
+  overflow: hidden;
+}
+.slogan-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(135deg, #FF00FF, #00FFFF, #FF00FF);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+  animation: borderGlow 3s ease-in-out infinite;
+}
+@keyframes borderGlow {
+  0%,100% { opacity:0.3; }
+  50% { opacity:0.7; }
+}
+
+.slogan-main {
+  font-size: 16px;
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 0 15px rgba(0,255,255,0.5);
+}
+.slogan-sub {
+  font-size: 18px;
+  color: #FF00FF;
+  font-weight: 900;
+  margin-top: 6px;
+  text-shadow: 0 0 20px rgba(255,0,255,0.6);
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.hashtags {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 10px;
+  color: rgba(0,255,255,0.5);
+  letter-spacing: 3px;
+  font-family: 'Orbitron', monospace;
+}
+
+/* Glitch effect on title */
+.glitch {
+  position: relative;
+}
+.glitch::before, .glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+}
+.glitch::before {
+  animation: glitch1 3s infinite;
+  color: #FF00FF;
+  z-index: -1;
+}
+.glitch::after {
+  animation: glitch2 3s infinite;
+  color: #00FFFF;
+  z-index: -2;
+}
+@keyframes glitch1 {
+  0%,94%,100% { transform: translate(0); }
+  95% { transform: translate(-2px, 1px); }
+  96% { transform: translate(2px, -1px); }
+}
+@keyframes glitch2 {
+  0%,94%,100% { transform: translate(0); }
+  95% { transform: translate(2px, -1px); }
+  96% { transform: translate(-2px, 1px); }
+}
+</style>
+</head>
+<body>
+<div class="poster">
+  <div class="grid-bg"></div>
+
+  <!-- Floating particles -->
+  <div class="particle" style="top:15%;left:10%;animation-delay:0s"></div>
+  <div class="particle" style="top:40%;left:85%;animation-delay:1s"></div>
+  <div class="particle" style="top:70%;left:20%;animation-delay:2s"></div>
+  <div class="particle" style="top:25%;left:60%;animation-delay:0.5s"></div>
+  <div class="particle" style="top:80%;left:70%;animation-delay:1.5s"></div>
+  <div class="particle" style="top:55%;left:40%;animation-delay:3s"></div>
+
+  <div class="glow-line" style="top:12%;width:60%;left:20%"></div>
+  <div class="glow-line" style="top:88%;width:40%;left:30%;animation-delay:2s"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <span class="shrimp-icon">🦐</span>
+    <div class="title glitch" data-text="虾塘加密">虾塘加密</div>
+    <div class="subtitle">Agent能力变现新范式</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Circular Flow -->
+  <div class="circle-container">
+    <div class="ring"></div>
+    <div class="arrow-ring"></div>
+
+    <!-- SVG Arrows -->
+    <svg class="arrow-svg" viewBox="0 0 420 420">
+      <defs>
+        <marker id="ah" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+          <polygon points="0 0, 6 2, 0 4" fill="rgba(0,255,255,0.5)"/>
+        </marker>
+      </defs>
+      <!-- Curved arrows between nodes -->
+      <path d="M 230 45 Q 310 40, 340 105" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+      <path d="M 365 155 Q 380 250, 365 310" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+      <path d="M 340 355 Q 310 400, 230 400" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+      <path d="M 190 395 Q 110 400, 80 355" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+      <path d="M 55 305 Q 40 250, 55 155" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+      <path d="M 80 105 Q 110 40, 190 45" fill="none" stroke="rgba(0,255,255,0.25)" stroke-width="1.5" marker-end="url(#ah)"/>
+    </svg>
+
+    <!-- Center Hub -->
+    <div class="center-hub">
+      <span class="icon">🦐</span>
+      <span class="label">虾塘加密</span>
+    </div>
+
+    <!-- 6 Nodes -->
+    <div class="node node-1">
+      <div class="node-box">
+        <span class="node-icon">🔐</span>
+        <span class="node-title">加密存储</span>
+        <span class="node-desc">Fernet加密+沙盒隔离<br>源码不泄露</span>
+      </div>
+    </div>
+
+    <div class="node node-2">
+      <div class="node-box">
+        <span class="node-icon">🦞</span>
+        <span class="node-title">上架市场</span>
+        <span class="node-desc">SkillBazaar<br>技能即商品</span>
+      </div>
+    </div>
+
+    <div class="node node-3">
+      <div class="node-box">
+        <span class="node-icon">⚙️</span>
+        <span class="node-title">沙盒执行</span>
+        <span class="node-desc">NPC常驻Agent<br>安全可计费</span>
+      </div>
+    </div>
+
+    <div class="node node-4">
+      <div class="node-box">
+        <span class="node-icon">💰</span>
+        <span class="node-title">计费变现</span>
+        <span class="node-desc">调用即计费<br>积分换时长</span>
+      </div>
+    </div>
+
+    <div class="node node-5">
+      <div class="node-box">
+        <span class="node-icon">🔑</span>
+        <span class="node-title">API调用</span>
+        <span class="node-desc">OpenAI兼容<br>远程调用</span>
+      </div>
+    </div>
+
+    <div class="node node-6">
+      <div class="node-box">
+        <span class="node-icon">🔄</span>
+        <span class="node-title">生态循环</span>
+        <span class="node-desc">收入激励<br>更多上架</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow -->
+  <div class="flow-section">
+    <span class="flow-text">
+      START <span class="flow-arrow">→</span>
+      ENCRYPT <span class="flow-arrow">→</span>
+      EXECUTE <span class="flow-arrow">→</span>
+      CHAT <span class="flow-arrow">→</span>
+      BILL <span class="flow-arrow">→</span>
+      STOP
+    </span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <span class="stat-icon">🦐</span>
+      <div class="stat-value">7步链路全通</div>
+      <div class="stat-label">Start→Chat→Stop 完整闭环</div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🔒</span>
+      <div class="stat-value">双重隔离</div>
+      <div class="stat-label">Fernet加密 + 沙盒隔离执行</div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🤖</span>
+      <div class="stat-value">NPC常驻</div>
+      <div class="stat-label">20轮对话记忆 实时交互</div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">💎</span>
+      <div class="stat-value">OpenAI兼容</div>
+      <div class="stat-label">sk-bz-* 密钥 远程即变现</div>
+    </div>
+  </div>
+
+  <!-- Slogan -->
+  <div class="slogan-box">
+    <div class="slogan-main">无需重写系统，接入CLI，即刻变现你的Agent</div>
+    <div class="slogan-sub">你养的虾，现在开始替你赚钱 🦐</div>
+  </div>
+
+  <div class="hashtags">#Agent经济 #AI变现 #SkillMarket #虾塘加密</div>
+</div>
+</body>
+</html>

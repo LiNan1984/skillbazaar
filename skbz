@@ -1,0 +1,531 @@
+#!/usr/bin/env python3
+"""
+skbz — SkillBazaar CLI工具
+让Agent和开发者通过命令行操作SkillBazaar所有功能
+参考: CLI-Anything (HKUDS) + opencli (jackwener)
+"""
+import argparse
+import json
+import os
+import sys
+import subprocess
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+from urllib.parse import urlencode
+
+# Config
+SKBZ_API = os.environ.get("SKBZ_API", "https://skillbazaar.harness-agent.app/api")
+SKBZ_TOKEN = os.environ.get("SKBZ_TOKEN", "")
+SKBZ_TOKEN_FILE = os.path.expanduser("~/.skbz_token")
+
+
+def _load_token():
+    """Load auth token from env or file"""
+    global SKBZ_TOKEN
+    if SKBZ_TOKEN:
+        return SKBZ_TOKEN
+    if os.path.exists(SKBZ_TOKEN_FILE):
+        with open(SKBZ_TOKEN_FILE) as f:
+            SKBZ_TOKEN = f.read().strip()
+    return SKBZ_TOKEN
+
+
+def _api(method: str, path: str, data: dict = None, raw: bool = False):
+    """Call SkillBazaar API"""
+    url = f"{SKBZ_API}{path}"
+    headers = {"Content-Type": "application/json"}
+    token = _load_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    body = json.dumps(data).encode() if data else None
+    req = Request(url, data=body, headers=headers, method=method.upper())
+
+    try:
+        with urlopen(req, timeout=30) as resp:
+            result = resp.read().decode()
+            if raw:
+                return result
+            return json.loads(result) if result else {}
+    except HTTPError as e:
+        error_body = e.read().decode()[:500]
+        try:
+            error_json = json.loads(error_body)
+            detail = error_json.get("detail", error_body)
+        except Exception:
+            detail = error_body
+        print(f"❌ API Error {e.code}: {detail}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _pprint(data):
+    """Pretty print JSON"""
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            pass
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+# ==================== Auth ====================
+
+def cmd_auth_login(args):
+    """登录获取token"""
+    data = {"email": args.email, "password": args.password}
+    # Try login endpoint
+    result = _api("post", "/v2/auth/login", data)
+    token = result.get("token") or result.get("access_token", "")
+    if token:
+        with open(SKBZ_TOKEN_FILE, "w") as f:
+            f.write(token)
+        os.chmod(SKBZ_TOKEN_FILE, 0o600)
+        print(f"✅ 登录成功! Token saved to {SKBZ_TOKEN_FILE}")
+    else:
+        print(f"❌ 登录失败: {result}")
+
+
+def cmd_auth_register(args):
+    """注册新用户"""
+    data = {
+        "email": args.email,
+        "password": args.password,
+        "nickname": args.nickname or args.email.split("@")[0],
+    }
+    result = _api("post", "/v2/auth/register", data)
+    _pprint(result)
+    print("✅ 注册成功! 请用 skbz auth login 登录")
+
+
+def cmd_auth_whoami(args):
+    """查看当前用户"""
+    result = _api("get", "/v2/auth/me")
+    _pprint(result)
+
+
+# ==================== Products ====================
+
+def cmd_product_list(args):
+    """列出商品/技能"""
+    params = {}
+    if args.category:
+        params["category"] = args.category
+    if args.search:
+        params["search"] = args.search
+    if args.page:
+        params["page"] = args.page
+    qs = urlencode(params) if params else ""
+    path = f"/products/?{qs}" if qs else "/products/"
+    result = _api("get", path)
+    products = result.get("products", result) if isinstance(result, dict) else result
+    if isinstance(products, list):
+        for p in products[:20]:
+            print(f"  [{p.get('id','?')}] {p.get('name','?')} — ¥{p.get('price',0)} | {p.get('category','')} | 👥{p.get('sales_count',0)}")
+        total = result.get("total", len(products)) if isinstance(result, dict) else len(products)
+        print(f"\n  共 {total} 个商品")
+    else:
+        _pprint(result)
+
+
+def cmd_product_info(args):
+    """查看商品详情"""
+    result = _api("get", f"/products/{args.id}")
+    _pprint(result)
+
+
+def cmd_product_create(args):
+    """发布商品/技能"""
+    data = {
+        "name": args.name,
+        "description": args.description or f"AI Skill: {args.name}",
+        "price": args.price,
+        "category": args.category or "skill",
+        "tags": args.tags or "AI,agent",
+        "source_type": args.source_type or "api",
+        "source_code": args.source_code or "",
+    }
+    if args.encrypted and args.source_code:
+        from cryptography.fernet import Fernet
+        enc_result = _api("post", "/sandbox/encrypt-agent", {"source_code": args.source_code})
+        data["encrypted_source"] = enc_result.get("encrypted_blob", "")
+        data["source_code"] = ""
+        print("🦐 源码已加密！虾入虾塘，能力可售不泄漏")
+    result = _api("post", "/products/", data)
+    _pprint(result)
+    print(f"✅ 商品发布成功!")
+
+
+def cmd_product_buy(args):
+    """购买商品"""
+    result = _api("post", f"/products/{args.id}/purchase")
+    _pprint(result)
+
+
+# ==================== Bounties ====================
+
+def cmd_bounty_list(args):
+    """列出悬赏任务"""
+    result = _api("get", "/bounties/")
+    bounties = result.get("bounties", result) if isinstance(result, dict) else result
+    if isinstance(bounties, list):
+        for b in bounties[:20]:
+            status = b.get("status", "open")
+            budget = b.get("budget_range", "¥?")
+            print(f"  [{b.get('id','?')}] {b.get('title','?')} — {budget} | {status} | 📋{b.get('application_count',0)}申请")
+    else:
+        _pprint(result)
+
+
+def cmd_bounty_create(args):
+    """发布悬赏"""
+    data = {
+        "title": args.title,
+        "description": args.description or f"悬赏: {args.title}",
+        "budget_range": args.budget or "¥1000-5000",
+        "category": args.category or "agent",
+        "tags": args.tags or "bounty",
+        "deadline": args.deadline or "2026-12-31",
+    }
+    result = _api("post", "/bounties/", data)
+    _pprint(result)
+    print("✅ 悬赏发布成功!")
+
+
+def cmd_bounty_deliver(args):
+    """提交悬赏作品"""
+    # Read delivery content
+    content = args.content
+    if args.file:
+        with open(args.file) as f:
+            content = f.read()
+    data = {
+        "bounty_id": args.bounty_id,
+        "content": content,
+        "notes": args.notes or "",
+    }
+    result = _api("post", f"/bounties/{args.bounty_id}/deliver", data)
+    _pprint(result)
+    print("✅ 作品提交成功! 完成悬赏可获得积分奖励")
+
+
+# ==================== Sandbox ====================
+
+def cmd_sandbox_status(args):
+    """查看沙盒状态"""
+    result = _api("get", "/sandbox/status")
+    _pprint(result)
+
+
+def cmd_sandbox_start(args):
+    """启动沙盒"""
+    result = _api("post", f"/sandbox/start?language={args.language or 'python'}")
+    _pprint(result)
+
+
+def cmd_sandbox_exec(args):
+    """在沙盒中执行代码"""
+    code = args.code
+    if args.file:
+        with open(args.file) as f:
+            code = f.read()
+    data = {"code": code, "language": args.language or "python", "encrypted": args.encrypted}
+    result = _api("post", "/sandbox/execute", data)
+    _pprint(result)
+
+
+def cmd_sandbox_stop(args):
+    """停止沙盒"""
+    result = _api("delete", "/sandbox/stop")
+    _pprint(result)
+
+
+# ==================== Chat (OpenAI Compatible) ====================
+
+def cmd_chat(args):
+    """OpenAI兼容聊天 — model=agent-{id}/skill-{id}/GLM-5.1-FP8"""
+    messages = []
+    if args.system:
+        messages.append({"role": "system", "content": args.system})
+    messages.append({"role": "user", "content": args.message})
+
+    data = {
+        "model": args.model or "GLM-5.1-FP8",
+        "messages": messages,
+        "stream": False,
+        "temperature": args.temperature or 0.7,
+    }
+    result = _api("post", "/sandbox/v1/chat/completions", data)
+    if isinstance(result, dict) and "choices" in result:
+        content = result["choices"][0].get("message", {}).get("content", "")
+        print(content)
+    else:
+        _pprint(result)
+
+
+# ==================== Points ====================
+
+def cmd_points_balance(args):
+    """查看积分余额"""
+    result = _api("get", "/points/balance")
+    _pprint(result)
+
+
+def cmd_points_checkin(args):
+    """每日签到"""
+    result = _api("post", "/points/checkin")
+    _pprint(result)
+
+
+def cmd_points_redeem(args):
+    """兑换 — 积分换沙盒时长或金币"""
+    data = {"amount": args.amount, "redeem_type": args.type or "sandbox"}
+    result = _api("post", "/points/redeem", data)
+    _pprint(result)
+
+
+# ==================== Cron ====================
+
+def cmd_cron_list(args):
+    """列出Cron商店商品"""
+    result = _api("get", "/cron/products/")
+    _pprint(result)
+
+
+def cmd_cron_subscribe(args):
+    """订阅Cron服务"""
+    data = {"product_id": args.product_id, "email": args.email}
+    result = _api("post", "/cron/subscribe", data)
+    _pprint(result)
+
+
+# ==================== Library ====================
+
+def cmd_library_list(args):
+    """我的库 — 已购买的Skills/Agents"""
+    result = _api("get", "/v2/auth/me")
+    # Also get licenses
+    result2 = _api("get", "/products/?category=skill&page_size=100")
+    _pprint(result2)
+
+
+# ==================== Agent ====================
+
+def cmd_agent_create(args):
+    """创建智能体"""
+    data = {
+        "name": args.name,
+        "system_prompt": args.prompt or "You are a helpful AI assistant.",
+        "description": args.description or f"Agent: {args.name}",
+        "model": args.model or "GLM-5.1-FP8",
+    }
+    result = _api("post", "/agents/", data)
+    _pprint(result)
+
+
+def cmd_agent_run(args):
+    """运行智能体"""
+    data = {
+        "message": args.message,
+        "stream": False,
+    }
+    result = _api("post", f"/agents/{args.agent_id}/run", data)
+    _pprint(result)
+
+
+# ==================== Encrypt ====================
+
+def cmd_encrypt(args):
+    """虾塘加密 — 加密Agent源码"""
+    code = args.source
+    if args.file:
+        with open(args.file) as f:
+            code = f.read()
+    result = _api("post", "/sandbox/encrypt-agent", {"source_code": code})
+    _pprint(result)
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(result, f, ensure_ascii=False)
+        print(f"✅ 加密结果已保存到 {args.output}")
+
+
+# ==================== Main ====================
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="skbz",
+        description="🦐 SkillBazaar CLI — AI技能集市命令行工具 | 龙虾大舞台有技能你就来",
+    )
+    sub = parser.add_subparsers(dest="command", help="子命令")
+
+    # --- auth ---
+    auth = sub.add_parser("auth", help="认证管理")
+    auth_sub = auth.add_subparsers(dest="subcommand")
+    
+    login = auth_sub.add_parser("login", help="登录")
+    login.add_argument("--email", "-e", required=True)
+    login.add_argument("--password", "-p", required=True)
+    
+    register = auth_sub.add_parser("register", help="注册")
+    register.add_argument("--email", "-e", required=True)
+    register.add_argument("--password", "-p", required=True)
+    register.add_argument("--nickname", "-n")
+    
+    auth_sub.add_parser("whoami", help="查看当前用户")
+
+    # --- product ---
+    prod = sub.add_parser("product", help="商品/技能管理")
+    prod_sub = prod.add_subparsers(dest="subcommand")
+    
+    p_list = prod_sub.add_parser("list", help="列出商品")
+    p_list.add_argument("--category", "-c")
+    p_list.add_argument("--search", "-s")
+    p_list.add_argument("--page", "-p", type=int)
+    
+    p_info = prod_sub.add_parser("info", help="商品详情")
+    p_info.add_argument("id", type=int)
+    
+    p_create = prod_sub.add_parser("create", help="发布商品")
+    p_create.add_argument("--name", "-n", required=True)
+    p_create.add_argument("--description", "-d")
+    p_create.add_argument("--price", type=int, required=True)
+    p_create.add_argument("--category", "-c")
+    p_create.add_argument("--tags", "-t")
+    p_create.add_argument("--source-type")
+    p_create.add_argument("--source-code")
+    p_create.add_argument("--encrypted", action="store_true", help="🦐 虾塘加密")
+    
+    p_buy = prod_sub.add_parser("buy", help="购买商品")
+    p_buy.add_argument("id", type=int)
+
+    # --- bounty ---
+    bounty = sub.add_parser("bounty", help="悬赏市场")
+    b_sub = bounty.add_subparsers(dest="subcommand")
+    
+    b_sub.add_parser("list", help="列出悬赏")
+    
+    b_create = b_sub.add_parser("create", help="发布悬赏")
+    b_create.add_argument("--title", "-t", required=True)
+    b_create.add_argument("--description", "-d")
+    b_create.add_argument("--budget", "-b")
+    b_create.add_argument("--category", "-c")
+    b_create.add_argument("--tags")
+    b_create.add_argument("--deadline")
+    
+    b_deliver = b_sub.add_parser("deliver", help="提交作品")
+    b_deliver.add_argument("--bounty-id", type=int, required=True)
+    b_deliver.add_argument("--content", "-c")
+    b_deliver.add_argument("--file", "-f", help="从文件读取内容")
+    b_deliver.add_argument("--notes")
+
+    # --- sandbox ---
+    sandbox = sub.add_parser("sandbox", help="沙盒管理 🦐")
+    s_sub = sandbox.add_subparsers(dest="subcommand")
+    
+    s_sub.add_parser("status", help="沙盒状态")
+    
+    s_start = s_sub.add_parser("start", help="启动沙盒")
+    s_start.add_argument("--language", "-l", default="python")
+    
+    s_exec = s_sub.add_parser("exec", help="执行代码")
+    s_exec.add_argument("--code", "-c")
+    s_exec.add_argument("--file", "-f", help="从文件读取代码")
+    s_exec.add_argument("--language", "-l", default="python")
+    s_exec.add_argument("--encrypted", action="store_true")
+    
+    s_sub.add_parser("stop", help="停止沙盒")
+
+    # --- chat ---
+    chat_p = sub.add_parser("chat", help="OpenAI兼容聊天")
+    chat_p.add_argument("--model", "-m", default="GLM-5.1-FP8", help="模型: agent-{id}/skill-{id}/GLM-5.1-FP8")
+    chat_p.add_argument("--message", "-msg", required=True)
+    chat_p.add_argument("--system", "-s")
+    chat_p.add_argument("--temperature", "-t", type=float, default=0.7)
+
+    # --- points ---
+    points = sub.add_parser("points", help="积分管理")
+    pt_sub = points.add_subparsers(dest="subcommand")
+    
+    pt_sub.add_parser("balance", help="积分余额")
+    pt_sub.add_parser("checkin", help="每日签到")
+    
+    pt_redeem = pt_sub.add_parser("redeem", help="兑换(积分→沙盒时长/金币)")
+    pt_redeem.add_argument("--amount", "-a", type=int, required=True, help="数量(小时或金币)")
+    pt_redeem.add_argument("--type", "-t", default="sandbox", choices=["sandbox", "coins"])
+
+    # --- cron ---
+    cron_p = sub.add_parser("cron", help="Cron商店")
+    c_sub = cron_p.add_subparsers(dest="subcommand")
+    
+    c_sub.add_parser("list", help="列出Cron商品")
+    
+    c_sub = c_sub.add_parser("subscribe", help="订阅")
+    c_sub.add_argument("--product-id", type=int, required=True)
+    c_sub.add_argument("--email", "-e", required=True)
+
+    # --- agent ---
+    agent_p = sub.add_parser("agent", help="智能体管理")
+    a_sub = agent_p.add_subparsers(dest="subcommand")
+    
+    a_create = a_sub.add_parser("create", help="创建智能体")
+    a_create.add_argument("--name", "-n", required=True)
+    a_create.add_argument("--prompt", "-p")
+    a_create.add_argument("--description", "-d")
+    a_create.add_argument("--model", "-m", default="GLM-5.1-FP8")
+    
+    a_run = a_sub.add_parser("run", help="运行智能体")
+    a_run.add_argument("--agent-id", type=int, required=True)
+    a_run.add_argument("--message", "-m", required=True)
+
+    # --- encrypt ---
+    enc = sub.add_parser("encrypt", help="🦐 虾塘加密")
+    enc.add_argument("--source", "-s", help="源码字符串")
+    enc.add_argument("--file", "-f", help="从文件读取源码")
+    enc.add_argument("--output", "-o", help="保存加密结果")
+
+    # --- library ---
+    sub.add_parser("library", help="我的库")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    # Route commands
+    routes = {
+        ("auth", "login"): cmd_auth_login,
+        ("auth", "register"): cmd_auth_register,
+        ("auth", "whoami"): cmd_auth_whoami,
+        ("product", "list"): cmd_product_list,
+        ("product", "info"): cmd_product_info,
+        ("product", "create"): cmd_product_create,
+        ("product", "buy"): cmd_product_buy,
+        ("bounty", "list"): cmd_bounty_list,
+        ("bounty", "create"): cmd_bounty_create,
+        ("bounty", "deliver"): cmd_bounty_deliver,
+        ("sandbox", "status"): cmd_sandbox_status,
+        ("sandbox", "start"): cmd_sandbox_start,
+        ("sandbox", "exec"): cmd_sandbox_exec,
+        ("sandbox", "stop"): cmd_sandbox_stop,
+        ("chat",): cmd_chat,
+        ("points", "balance"): cmd_points_balance,
+        ("points", "checkin"): cmd_points_checkin,
+        ("points", "redeem"): cmd_points_redeem,
+        ("cron", "list"): cmd_cron_list,
+        ("cron", "subscribe"): cmd_cron_subscribe,
+        ("agent", "create"): cmd_agent_create,
+        ("agent", "run"): cmd_agent_run,
+        ("encrypt",): cmd_encrypt,
+        ("library",): cmd_library_list,
+    }
+
+    key = (args.command, args.subcommand) if hasattr(args, 'subcommand') and args.subcommand else (args.command,)
+    handler = routes.get(key)
+    if handler:
+        handler(args)
+    else:
+        parser.parse_args(["--help"])
+
+
+if __name__ == "__main__":
+    main()

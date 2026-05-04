@@ -8,10 +8,12 @@ import {
   Tag,
   ChevronRight,
   Home,
+  Box,
 } from 'lucide-react'
-import { getProduct, getProducts, getUser, getMe, executeSkill, getLibrary } from '../services/api'
+import { getProduct, getProducts, getUser, getMe, getLibrary } from '../services/api'
 import PurchaseModal from '../components/PurchaseModal'
 import ProductCard from '../components/ProductCard'
+import { useLang } from '../i18n'
 
 const SOURCE_COLORS = {
   Gate: '#3b82f6',
@@ -28,17 +30,15 @@ const CATEGORY_CONFIG = {
   Workflow: { emoji: '🔄', cssClass: 'cat-workflow' },
 }
 
-export default function ProductDetailPage({ userId }) {
+export default function ProductDetailPage({ userId, authToken }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t, lang } = useLang()
   const [product, setProduct] = useState(null)
   const [related, setRelated] = useState([])
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [showPurchase, setShowPurchase] = useState(false)
-  const [skillInput, setSkillInput] = useState('')
-  const [skillOutput, setSkillOutput] = useState('')
-  const [executing, setExecuting] = useState(false)
   const [owned, setOwned] = useState(false)
 
   useEffect(() => {
@@ -101,10 +101,10 @@ export default function ProductDetailPage({ userId }) {
       <div className="detail-page">
         <div className="empty-state">
           <span className="empty-icon">😔</span>
-          <h3>商品不存在</h3>
-          <p>该商品可能已下架</p>
+          <h3>{t('pd.notFound')}</h3>
+          <p>{t('pd.notFoundDesc')}</p>
           <button className="btn btn-primary" onClick={() => navigate('/')}>
-            返回首页
+            {t('pd.backHome')}
           </button>
         </div>
       </div>
@@ -121,7 +121,7 @@ export default function ProductDetailPage({ userId }) {
   return (
     <div className="detail-page">
       <div className="detail-breadcrumb">
-        <Link to="/"><Home size={14} /> 首页</Link>
+        <Link to="/"><Home size={14} /> {lang === 'zh' ? '首页' : 'Home'}</Link>
         <ChevronRight size={14} className="detail-breadcrumb-separator" />
         <Link to={`/?category=${product.category}`}>{product.category}</Link>
         <ChevronRight size={14} className="detail-breadcrumb-separator" />
@@ -154,11 +154,11 @@ export default function ProductDetailPage({ userId }) {
                 </span>
                 <span className="detail-stat">
                   <Download size={14} />
-                  {downloads} 次下载
+                  {downloads} {t('pd.downloads')}
                 </span>
                 <span className="detail-stat">
                   <ShoppingCart size={14} />
-                  {sales} 次销售
+                  {sales} {t('pd.sales')}
                 </span>
               </div>
             </div>
@@ -176,13 +176,13 @@ export default function ProductDetailPage({ userId }) {
           ) })()}
 
           <div className="detail-section">
-            <h2>商品描述</h2>
+            <h2>{t('pd.description')}</h2>
             <p className="detail-description">{product.description}</p>
           </div>
 
           {product.content_preview && (
             <div className="detail-section">
-              <h2>内容预览</h2>
+              <h2>{t('pd.contentPreview')}</h2>
               <div className="code-preview">
                 <pre>
                   <code>{product.content_preview}</code>
@@ -200,45 +200,36 @@ export default function ProductDetailPage({ userId }) {
                 className="github-link"
               >
                 <ExternalLink size={16} />
-                查看 GitHub 仓库
+                {lang === 'zh' ? '查看 GitHub 仓库' : 'View GitHub Repo'}
               </a>
             </div>
           )}
 
           <div className="detail-section skill-execute-section">
-            <h2>体验技能</h2>
-            <p className="skill-execute-desc">输入参数，体验这个技能的效果（免费试用 3 次）</p>
-            <textarea
-              className="form-textarea skill-execute-input"
-              placeholder="输入体验参数，如：分析 BTC 行情趋势"
-              value={skillInput}
-              onChange={(e) => setSkillInput(e.target.value)}
-              rows={3}
-            />
-            <button
-              className="btn btn-primary skill-execute-btn"
-              disabled={executing || !skillInput.trim()}
-              onClick={async () => {
-                setExecuting(true)
-                setSkillOutput('')
-                try {
-                  const result = await executeSkill(product.id, userId, skillInput.trim())
-                  setSkillOutput(result.output || result.error || '执行完成')
-                } catch (err) {
-                  setSkillOutput('执行失败：' + (err?.message || '请先购买或网络异常'))
-                } finally {
-                  setExecuting(false)
-                }
-              }}
-            >
-              {executing ? '执行中...' : '运行技能'}
-            </button>
-            {skillOutput && (
-              <div className="skill-execute-output">
-                <h4>输出结果</h4>
-                <pre>{skillOutput}</pre>
-              </div>
-            )}
+            <h2>{t('pd.trySkill')}</h2>
+            <p className="skill-execute-desc">{t('pd.trySkillDesc')}</p>
+            <div className="skill-sandbox-cta">
+              {owned ? (
+                <button
+                  className="btn btn-primary skill-sandbox-btn"
+                  onClick={() => navigate(`/sandbox?tab=chat&agent=${encodeURIComponent(product.name)}&msg=${encodeURIComponent(lang === 'zh' ? '请帮我使用这个技能' : 'Help me use this skill')}`)}
+                >
+                  <Box size={18} />
+                  {t('pd.ownedUse')}
+                </button>
+              ) : (
+                <div className="skill-sandbox-locked">
+                  <p className="skill-sandbox-locked-text">{t('pd.notOwned')}</p>
+                  <button
+                    className="btn btn-primary skill-sandbox-btn"
+                    onClick={() => setShowPurchase(true)}
+                  >
+                    <ShoppingCart size={16} />
+                    {t('pd.buyNow')} · {'\uFFE5'}{product.price}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -246,7 +237,7 @@ export default function ProductDetailPage({ userId }) {
         <div className="detail-buy-panel">
           <div className="buy-panel-price">
             <span className="buy-panel-price-value">{'\uFFE5'}{product.price}</span>
-            <span className="buy-panel-price-unit">金币</span>
+            <span className="buy-panel-price-unit">{t('pd.coins')}</span>
             {product.original_price && product.original_price > product.price && (
               <span className="buy-panel-price-original">{'\uFFE5'}{product.original_price}</span>
             )}
@@ -255,37 +246,37 @@ export default function ProductDetailPage({ userId }) {
           <div className="buy-panel-stats">
             <span className="buy-panel-stat">
               <Star size={14} style={{ color: '#eab308' }} />
-              {Number(rating).toFixed(1)} 评分
+              {Number(rating).toFixed(1)} {t('pd.rating')}
             </span>
             <span className="buy-panel-stat">
               <Download size={14} />
-              {downloads} 下载
+              {downloads} {t('pd.downloads')}
             </span>
           </div>
 
           <div className="buy-panel-divider" />
 
           <div className="buy-panel-balance">
-            <span className="buy-panel-balance-label">账户余额</span>
+            <span className="buy-panel-balance-label">{t('pd.balance')}</span>
             <span className={`buy-panel-balance-value ${insufficient ? 'insufficient' : 'sufficient'}`}>
-              {'\uFFE5'}{balance.toLocaleString()} 金币
+              {'\uFFE5'}{balance.toLocaleString()} {t('pd.coins')}
             </span>
           </div>
 
           {owned ? (
-            <button className="btn-owned" disabled>
-              已购买 · 在我的库中
+            <button className="btn-owned" onClick={() => navigate(`/sandbox?tab=chat&agent=${encodeURIComponent(product.name)}`)}>
+              {t('pd.ownedUse')}
             </button>
           ) : (
             <button className="btn-buy" onClick={() => setShowPurchase(true)}>
-              立即购买 · {'\uFFE5'}{product.price} 金币
+              {t('pd.buyNow')} · {'\uFFE5'}{product.price} {t('pd.coins')}
             </button>
           )}
         </div>
 
         {related.length > 0 && (
           <div className="related-section">
-            <h2>相关推荐</h2>
+            <h2>{t('pd.related')}</h2>
             <div className="product-grid related-grid">
               {related.map((p) => (
                 <ProductCard key={p.id} product={p} />

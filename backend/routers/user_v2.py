@@ -11,6 +11,8 @@ from models import (
     RegisterRequest, LoginRequest, AuthResponse,
     ProfileUpdate, RechargeRequest, BehaviorLog,
 )
+import services.admin_service as admin_svc
+import services.risk_detector as risk_detector
 
 router = APIRouter(prefix="/api/v2", tags=["user-v2"])
 
@@ -123,6 +125,9 @@ async def log_behavior(req: BehaviorLog, user: dict = Depends(get_current_user))
         "target_id": req.target_id,
         "metadata": req.metadata or {},
     })
+    await db.increment_task_progress(user["id"], req.action)
+    if req.action == "buy":
+        await db.increment_task_progress(user["id"], "spend")
     return {"success": True}
 
 
@@ -156,6 +161,18 @@ async def get_my_products(user: dict = Depends(get_current_user)):
         return {"products": [dict(r) for r in rows]}
     finally:
         await db_conn.close()
+
+
+@router.delete("/seller/products/{product_id}")
+async def delete_seller_product(product_id: int, user: dict = Depends(get_current_user)):
+    product = await db.fetch_product_by_id(product_id)
+    if not product:
+        raise HTTPException(404, "商品不存在")
+    if product.get("seller_name") != user.get("nickname") and user.get("role") != "admin":
+        raise HTTPException(403, "无权删除")
+    await db.execute("DELETE FROM products WHERE id = ?", (product_id,))
+    await db.commit()
+    return {"ok": True}
 
 
 @router.put("/seller/products/{product_id}/status")
@@ -281,3 +298,98 @@ async def get_analytics(user: dict = Depends(get_current_user)):
         }
     finally:
         await db_conn.close()
+
+
+# ---- Admin Management ----
+
+@router.get("/admin/bounties")
+async def admin_list_bounties(
+    status: str = None, page: int = 1, page_size: int = 20,
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    bounties, total = await admin_svc.list_bounties_for_admin(status, page, page_size)
+    return {"total": total, "page": page, "page_size": page_size, "bounties": bounties}
+
+
+@router.put("/admin/bounties/{bounty_id}/status")
+async def admin_update_bounty_status(
+    bounty_id: int,
+    status: str,
+    reason: str = "",
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    valid_statuses = ("open", "in_progress", "completed", "cancelled", "approved", "rejected")
+    if status not in valid_statuses:
+        raise HTTPException(400, f"无效状态，支持: {', '.join(valid_statuses)}")
+    result = await admin_svc.update_bounty_status(bounty_id, status, reason)
+    if not result:
+        raise HTTPException(404, "悬赏不存在")
+    return {"success": True, **result}
+
+
+@router.get("/admin/skills")
+async def admin_list_skills(
+    page: int = 1, page_size: int = 20,
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    skills, total = await admin_svc.list_skills_for_admin(page, page_size)
+    return {"total": total, "page": page, "page_size": page_size, "skills": skills}
+
+
+@router.put("/admin/skills/{asset_id}/status")
+async def admin_update_skill_status(
+    asset_id: int,
+    status: str,
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    valid_statuses = ("active", "takedown", "pending")
+    if status not in valid_statuses:
+        raise HTTPException(400, f"无效状态，支持: {', '.join(valid_statuses)}")
+    result = await admin_svc.update_skill_status(asset_id, status)
+    if not result:
+        raise HTTPException(404, "技能资产不存在")
+    return {"success": True, **result}
+
+
+@router.get("/admin/users")
+async def admin_list_users(
+    page: int = 1, page_size: int = 20,
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    users, total = await admin_svc.list_users_for_admin(page, page_size)
+    return {"total": total, "page": page, "page_size": page_size, "users": users}
+
+
+@router.put("/admin/users/{user_id}/status")
+async def admin_update_user_status(
+    user_id: str,
+    status: str,
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    valid_statuses = ("active", "banned")
+    if status not in valid_statuses:
+        raise HTTPException(400, f"无效状态，支持: {', '.join(valid_statuses)}")
+    result = await admin_svc.update_user_status(user_id, status)
+    if not result:
+        raise HTTPException(404, "用户不存在")
+    return {"success": True, **result}
+
+
+@router.post("/admin/scan-risks")
+async def admin_scan_risks(user: dict = Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "需要管理员权限")
+    flagged = await risk_detector.scan_all_risks()
+    return {"success": True, "flagged_count": len(flagged), "flagged_items": flagged}
