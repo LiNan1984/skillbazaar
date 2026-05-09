@@ -18,9 +18,12 @@ __pycache__/
 # Test results
 frontend/test-results/
 
-# Screenshots
-screenshots/
+# Screenshots (keep final/ for README)
+screenshots/*
+!screenshots/final/
+!screenshots/final/*.png
 *.png
+!screenshots/final/*.png
 
 # IDE
 .vscode/
