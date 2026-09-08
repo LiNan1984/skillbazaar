@@ -1,16 +1,18 @@
 from __future__ import annotations
 """
 AgentSkillsHub 爬虫
-数据源: https://agentskillshub.dev/
-策略: 抓取首页 Top Skills + 分页获取更多
+数据源: https://agentskillshub.dev/openclaw/skills/
+策略: 解析 Next.js RSC flight payload 中的 skills 数组（含 name/desc/stars/grade）
 """
 import re
-import json
 import httpx
 from typing import Optional
 from .base import BaseCrawler, CrawlerResult
 
 BASE_URL = "https://agentskillshub.dev"
+OPENCLAW_SKILLS_URL = f"{BASE_URL}/openclaw/skills/"
+# Cap catalog refresh size; prefer highest heat (stars + installs).
+MAX_SKILLS = 200
 
 
 class AgentSkillsHubCrawler(BaseCrawler):
@@ -18,85 +20,162 @@ class AgentSkillsHubCrawler(BaseCrawler):
     source_platform = "AgentSkillsHub"
 
     def __init__(self):
-        self.client = httpx.Client(timeout=30, follow_redirects=True, headers={
+        self.client = httpx.Client(timeout=60, follow_redirects=True, headers={
             "User-Agent": "SkillBazaar-Crawler/1.0"
         })
 
     def fetch_list(self) -> list[dict]:
-        """从首页和分类页抓取技能列表"""
-        skills = []
-        seen = set()
-
-        # Fetch homepage
-        resp = self.client.get(BASE_URL)
+        """从 OpenClaw Skills 目录页提取结构化技能列表"""
+        resp = self.client.get(OPENCLAW_SKILLS_URL)
         resp.raise_for_status()
-        html = resp.text
-
-        # Parse skill entries from HTML (ranked list)
-        # Pattern: number + name + grade + description + installs + heat
-        pattern = r'(\d+)\s+([\w-]+)\s+([A-F])\s+(.+?)(?:\s+(\d[\d,]*)\s+Installs)?\s+(\d[\d,]*)\s+Heat'
-        for match in re.finditer(pattern, html, re.DOTALL):
-            rank, name, grade, desc, installs, heat = match.groups()
-            if name in seen:
-                continue
-            seen.add(name)
-            skills.append({
-                "name": name.strip(),
-                "description": desc.strip()[:200],
-                "grade": grade.strip(),
-                "installs": int(installs.replace(",", "")) if installs else 0,
-                "heat": int(heat.replace(",", "")),
-                "rank": int(rank),
-            })
-
-        # If regex failed, try parsing JSON-LD or structured data
+        skills = self._parse_rsc_skills(resp.text)
         if not skills:
-            skills = self._parse_structured(html, seen)
+            # Sitemap-only slugs lack real descriptions; do not treat as a successful
+            # crawl that would overwrite committed catalog rows with synthetic text.
+            sitemap_count = len(self._parse_sitemap_skills())
+            raise RuntimeError(
+                "AgentSkillsHub RSC parse returned 0 skills"
+                + (f" (sitemap had {sitemap_count} slugs, ignored as metadata-thin)" if sitemap_count else "")
+                + "; site shape likely changed"
+            )
 
+        skills.sort(
+            key=lambda s: (s.get("stars", 0) * 10 + s.get("installs", 0)),
+            reverse=True,
+        )
+        return skills[:MAX_SKILLS]
+
+    def _parse_rsc_skills(self, html: str) -> list[dict]:
+        """Parse skill objects from Next.js flight / escaped JSON payloads."""
+        skills: list[dict] = []
+        seen: set[str] = set()
+
+        # Prefer unescaped flight chunks when present
+        chunks = re.findall(r'self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)', html)
+        payloads = [html]
+        for c in chunks:
+            try:
+                payloads.append(bytes(c, "utf-8").decode("unicode_escape"))
+            except Exception:
+                payloads.append(
+                    c.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
+                )
+
+        obj_pat = re.compile(
+            r'\{\s*"id"\s*:\s*"openclaw:[^"]+"\s*,\s*'
+            r'"name"\s*:\s*"([^"]+)"\s*,\s*'
+            r'"slug"\s*:\s*"([^"]+)"\s*,\s*'
+            r'"author"\s*:\s*"([^"]*)"\s*,\s*'
+            r'"category"\s*:\s*"([^"]*)"\s*,\s*'
+            r'"description"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*'
+            r'"stars"\s*:\s*(\d+)\s*,\s*'
+            r'"install_count"\s*:\s*(\d+).*?'
+            r'"securityGrade"\s*:\s*"([A-F])".*?'
+            r'"source_url"\s*:\s*"([^"]*)"',
+            re.DOTALL,
+        )
+
+        for payload in payloads:
+            for match in obj_pat.finditer(payload):
+                name, slug, author, category, desc, stars, installs, grade, source_url = match.groups()
+                key = name.strip() or slug.strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                desc = bytes(desc, "utf-8").decode("unicode_escape") if "\\" in desc else desc
+                skills.append({
+                    "name": key,
+                    "slug": slug.strip(),
+                    "description": desc.strip()[:300],
+                    "grade": grade,
+                    "installs": int(installs),
+                    "stars": int(stars),
+                    "heat": int(stars) * 10 + int(installs) // 100,
+                    "rank": len(skills) + 1,
+                    "author": author,
+                    "category": category,
+                    "source_url": source_url,
+                })
+
+        # Looser fallback if strict pattern misses (escaped quotes in raw HTML)
+        if not skills:
+            esc_pat = re.compile(
+                r'\\"name\\":\\"([^\\"]+)\\".{0,80}?\\"slug\\":\\"([^\\"]+)\\".{0,200}?'
+                r'\\"description\\":\\"((?:\\\\.|[^\\"\\])*)\\".{0,80}?'
+                r'\\"stars\\":(\d+).{0,80}?\\"install_count\\":(\d+).{0,200}?'
+                r'\\"securityGrade\\":\\"([A-F])\\".{0,200}?\\"source_url\\":\\"([^\\"]*)\\"',
+                re.DOTALL,
+            )
+            for match in esc_pat.finditer(html):
+                name, slug, desc, stars, installs, grade, source_url = match.groups()
+                key = name.strip() or slug.strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                desc = desc.replace('\\"', '"').replace("\\n", " ")
+                skills.append({
+                    "name": key,
+                    "slug": slug.strip(),
+                    "description": desc.strip()[:300],
+                    "grade": grade,
+                    "installs": int(installs),
+                    "stars": int(stars),
+                    "heat": int(stars) * 10 + int(installs) // 100,
+                    "rank": len(skills) + 1,
+                    "author": "",
+                    "category": "",
+                    "source_url": source_url,
+                })
         return skills
 
-    def _parse_structured(self, html: str, seen: set) -> list[dict]:
-        """备用解析：从结构化数据提取"""
+    def _parse_sitemap_skills(self) -> list[dict]:
+        resp = self.client.get(f"{BASE_URL}/sitemap.xml")
+        resp.raise_for_status()
+        locs = re.findall(
+            r"<loc>(https://agentskillshub\.dev/skills/([\w.-]+)/?)</loc>",
+            resp.text,
+        )
         skills = []
-        # Try to find skill names in common patterns
-        for match in re.finditer(r'"name":\s*"([\w-]+)"', html):
-            name = match.group(1)
-            if name not in seen and not name.startswith(("Open", "Fetch", "Filesystem", "Git ", "Memory ", "Sequential")):
-                seen.add(name)
-                skills.append({
-                    "name": name,
-                    "description": "",
-                    "grade": "B",
-                    "installs": 0,
-                    "heat": 100,
-                    "rank": len(skills) + 1,
-                })
+        for url, slug in locs:
+            skills.append({
+                "name": slug,
+                "slug": slug,
+                "description": "",
+                "grade": "B",
+                "installs": 0,
+                "stars": 0,
+                "heat": 0,
+                "rank": len(skills) + 1,
+                "author": "",
+                "category": "",
+                "source_url": url,
+            })
         return skills
 
     def fetch_detail(self, item: dict) -> Optional[CrawlerResult]:
         name = item["name"]
         heat = item.get("heat", 100)
+        stars = item.get("stars", 0)
+        installs = item.get("installs", 0)
 
-        # Price based on heat score
+        # Price based on heat / popularity
         if heat > 170:
-            price = 149 + (heat - 170)
+            price = 149 + min(heat - 170, 100)
         elif heat > 100:
             price = 89 + (heat - 100) // 2
         else:
-            price = 49 + heat // 5
+            price = 49 + max(heat, 0) // 5
 
         original_price = int(price * 1.3)
 
-        # Generate Chinese description
         desc_en = item.get("description", "")
         display_name = self._generate_display_name(name, desc_en)
         desc_zh = self._generate_description(name, desc_en)
-
-        # Determine sub-category
-        sub_cat = self._classify_category(name, desc_en)
-
-        # Tags
+        sub_cat = item.get("category") or self._classify_category(name, desc_en)
         tags = self._extract_tags(name, desc_en)
+        grade = item.get("grade", "B")
+        source_url = item.get("source_url") or f"{BASE_URL}/skills/{item.get('slug', name)}/"
+        github_url = source_url if "github.com" in source_url else ""
 
         return CrawlerResult(
             source="agentskillshub",
@@ -107,15 +186,18 @@ class AgentSkillsHubCrawler(BaseCrawler):
             sub_category=sub_cat,
             price=min(price, 299),
             original_price=min(original_price, 399),
-            seller_name="AgentSkillsHub",
+            seller_name=item.get("author") or "AgentSkillsHub",
             seller_avatar="https://api.dicebear.com/7.x/bottts/svg?seed=agentskillshub",
             tags=tags,
             source_platform=self.source_platform,
-            github_url="",
-            content_preview=f"# {name}\n\n{desc_zh}\n\nSecurity Grade: {item.get('grade', 'B')}\nInstalls: {item.get('installs', 0):,}\nHeat: {heat}",
-            source_url=f"{BASE_URL}",
+            github_url=github_url,
+            content_preview=(
+                f"# {name}\n\n{desc_zh}\n\n"
+                f"Security Grade: {grade}\nStars: {stars}\nInstalls: {installs:,}\nHeat: {heat}"
+            ),
+            source_url=source_url,
             version="",
-            extra={"grade": item.get("grade", "B"), "heat": heat, "installs": item.get("installs", 0)},
+            extra={"grade": grade, "heat": heat, "installs": installs, "stars": stars},
         )
 
     @staticmethod
@@ -140,7 +222,7 @@ class AgentSkillsHubCrawler(BaseCrawler):
     @staticmethod
     def _generate_description(name: str, desc: str) -> str:
         if desc and len(desc) > 10:
-            return desc[:100]
+            return desc[:200]
         templates = {
             "browser": "浏览器自动化工具，支持页面导航、点击、输入和截图",
             "agent": "AI Agent 能力增强工具，提升智能体表现",

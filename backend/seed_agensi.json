@@ -1,61 +1,500 @@
 [
   {
     "name": "code-reviewer",
-    "display_name": "AI 代码审查专家",
-    "description": "自动审查代码中的 Bug、安全漏洞、逻辑错误、性能问题和代码风格违规。按严重程度组织发现的问题，并提供修复建议和代码示例。支持 SQL 注入检测、XSS 漏洞扫描、认证绕过检查等。兼容 Claude Code、GitHub Copilot CLI、Sourcery 等 SKILL.md 兼容的 AI 编码代理。",
+    "display_name": "代码审查专家",
+    "description": "Automate senior level code reviews for security, bugs, and performance. Get actionable fixes and structured feedback. Install in 30 seconds.",
     "category": "Skill",
-    "sub_category": "code-review",
+    "sub_category": "代码审查",
     "price": 0,
     "original_price": 0,
-    "seller_name": "Samuel Rose",
+    "seller_name": "category",
     "source_platform": "Agensi",
     "github_url": "",
     "tags": [
-      "code-review",
-      "security",
-      "bugs",
-      "best-practices",
-      "pull-request"
+      "代码审查",
+      "安全",
+      "自动化"
     ],
-    "content_preview": "# code-reviewer\n\nReviews your code for bugs, security vulnerabilities, logic errors, performance issues, and style violations. Organizes findings by severity and suggests fixes with code examples.\n\n## Use Cases\n- Identify security vulnerabilities like SQL injection and cross-site scripting\n- Surface performance bottlenecks and logic errors before deployment\n- Categorize findings by severity to prioritize critical fixes first\n- Apply suggested code examples to resolve style and syntax violations\n\n## Severity Levels\n- Critical: Security vulnerabilities, data loss risks\n- Warning: Logic errors, performance bottlenecks\n- Suggestion: Style violations, refactoring opportunities"
+    "content_preview": "# code-reviewer\n\nAutomate senior level code reviews for security, bugs, and performance. Get actionable fixes and structured feedback. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/code-reviewer",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
   },
   {
     "name": "git-commit-writer",
-    "display_name": "Git 提交信息生成器",
-    "description": "通过分析你的 Git 暂存更改，自动生成符合 Conventional Commits 规范的提交信息。自动检测提交类型（feat/fix/refactor 等）、范围和破坏性变更。支持中英文提交信息，帮助团队保持规范的 Git 提交历史。",
+    "display_name": "Git 提交信息生成",
+    "description": "Write precise conventional commit messages by analyzing staged changes. Improve developer workflow with automated git message. Install in 30 seconds.",
     "category": "Skill",
-    "sub_category": "productivity",
+    "sub_category": "Git工具",
     "price": 0,
     "original_price": 0,
-    "seller_name": "Samuel Rose",
+    "seller_name": "category",
     "source_platform": "Agensi",
     "github_url": "",
     "tags": [
-      "git",
-      "commit",
-      "conventional-commits",
-      "productivity"
+      "自动化"
     ],
-    "content_preview": "# git-commit-writer\n\nWrites conventional commit messages by analyzing your staged git changes. Detects commit type, scope, and breaking changes automatically.\n\n## How it works\n1. Analyzes `git diff --cached` output\n2. Identifies changed files and their impact\n3. Determines commit type (feat, fix, refactor, docs, etc.)\n4. Generates a structured commit message following Conventional Commits spec\n\n## Example Output\n```\nfeat(auth): add JWT refresh token rotation\n\n- Implement refresh token family tracking\n- Add automatic reuse detection\n- Invalidate compromised token families"
+    "content_preview": "# git-commit-writer\n\nWrite precise conventional commit messages by analyzing staged changes. Improve developer workflow with automated git message. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/git-commit-writer",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
   },
   {
     "name": "readme-generator",
-    "display_name": "README 文档生成器",
-    "description": "通过扫描项目实际结构、依赖和代码，自动生成完整、精美的 README.md 文件。自动检测技术栈，生成安装说明、使用示例、API 文档和贡献指南。支持自动识别 package.json、requirements.txt、go.mod 等依赖文件。",
+    "display_name": "README 生成器",
+    "description": "Instantly generate accurate, professional README files by scanning your code, dependencies, and project structure. Install in 30 seconds.",
     "category": "Skill",
-    "sub_category": "documentation",
+    "sub_category": "文档",
     "price": 0,
     "original_price": 0,
-    "seller_name": "Samuel Rose",
+    "seller_name": "category",
     "source_platform": "Agensi",
     "github_url": "",
     "tags": [
-      "readme",
-      "documentation",
-      "generator",
-      "project-setup"
+      "文档",
+      "自动化"
     ],
-    "content_preview": "# readme-generator\n\nGenerates a complete, polished README.md by scanning your actual project structure, dependencies, and code.\n\n## What it detects\n- Project type (Node.js, Python, Go, Rust, etc.)\n- Dependencies from manifests (package.json, requirements.txt, go.mod)\n- Available scripts and commands\n- License information\n- Test frameworks\n\n## Generated sections\n- Project overview with badges\n- Installation instructions\n- Usage examples\n- API reference\n- Contributing guidelines"
+    "content_preview": "# readme-generator\n\nInstantly generate accurate, professional README files by scanning your code, dependencies, and project structure. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/readme-generator",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "pr-description-writer",
+    "display_name": "PR 描述生成",
+    "description": "Automate pull request summaries from git diffs. Generate clear What, Why, and How documentation for GitHub and GitLab. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "文档",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "category",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "文档",
+      "自动化"
+    ],
+    "content_preview": "# pr-description-writer\n\nAutomate pull request summaries from git diffs. Generate clear What, Why, and How documentation for GitHub and GitLab. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/pr-description-writer",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "prompt-engineer",
+    "display_name": "提示词工程师",
+    "description": "Deploy expert prompt engineering patterns for robust LLM apps. High-quality system prompts, CoT, and RAG strategies. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "DevOps",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "category",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "DevOps",
+      "AI"
+    ],
+    "content_preview": "# prompt-engineer\n\nDeploy expert prompt engineering patterns for robust LLM apps. High-quality system prompts, CoT, and RAG strategies. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/prompt-engineer",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "seo-optimizer",
+    "display_name": "SEO 优化器",
+    "description": "Optimize Chinese social media content for SEO while scanning for illegal advertising words to ensure compliance. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "营销",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "category",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "开发工具"
+    ],
+    "content_preview": "# seo-optimizer\n\nOptimize Chinese social media content for SEO while scanning for illegal advertising words to ensure compliance. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/seo-optimizer",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "humanize-writing",
+    "display_name": "Humanize Writing",
+    "description": "Remove AI smell and restructure robotic text into natural human prose. Fix cadence, flow, and tone across multiple languages. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "API开发",
+    "price": 0,
+    "original_price": 0,
+    "seller_name": "category",
+    "source_platform": "Agensi",
+    "github_url": "",
+    "tags": [
+      "开发工具"
+    ],
+    "content_preview": "# humanize-writing\n\nRemove AI smell and restructure robotic text into natural human prose. Fix cadence, flow, and tone across multiple languages. Install in 30 seconds.\n\nPrice: Free",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "source_url": "https://www.agensi.io/skills/humanize-writing",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "design-philosophy",
+    "display_name": "Design Philosophy",
+    "description": "Stop building generic AI websites. Teach your agent to apply industry-specific visual language, typography, and 2026 motion deps. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "前端",
+    "price": 50,
+    "original_price": 65,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# design-philosophy\n\nStop building generic AI websites. Teach your agent to apply industry-specific visual language, typography, and 2026 motion deps. Install in 30 seconds.\n\nPrice: $9.99",
+    "source_url": "https://www.agensi.io/skills/design-philosophy",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "cinematic-sites",
+    "display_name": "Cinematic Sites",
+    "description": "Transform any business URL into a high end 4K animated landing page with GSAP and visual verification. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "开发工具",
+    "price": 60,
+    "original_price": 78,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "开发工具"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# cinematic-sites\n\nTransform any business URL into a high end 4K animated landing page with GSAP and visual verification. Install in 30 seconds.\n\nPrice: $12",
+    "source_url": "https://www.agensi.io/skills/cinematic-sites",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "cinematic-4k-landing-page",
+    "display_name": "Cinematic 4K Landing Page",
+    "description": "Generate high-end, animated landing pages from any URL with AI visuals and GSAP. Deploy to Cloudflare Pages instantly. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "DevOps",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "DevOps",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# cinematic-4k-landing-page\n\nGenerate high-end, animated landing pages from any URL with AI visuals and GSAP. Deploy to Cloudflare Pages instantly. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/cinematic-4k-landing-page",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "temporal-reasoning-sleuth",
+    "display_name": "Temporal Reasoning Sleuth",
+    "description": "Enable agents to trace causal chains and resolve complex timelines using event graphs and windowed context. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "AI与LLM",
+    "price": 75,
+    "original_price": 97,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# temporal-reasoning-sleuth\n\nEnable agents to trace causal chains and resolve complex timelines using event graphs and windowed context. Install in 30 seconds.\n\nPrice: $15",
+    "source_url": "https://www.agensi.io/skills/temporal-reasoning-sleuth",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "1-klick-magnet-website",
+    "display_name": "1 Klick Magnet Website",
+    "description": "Convert any URL into a high-end animated landing page with 4K assets and GSAP. Automate brand analysis and deployment. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "DevOps",
+    "price": 95,
+    "original_price": 123,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "DevOps",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# 1-klick-magnet-website\n\nConvert any URL into a high-end animated landing page with 4K assets and GSAP. Automate brand analysis and deployment. Install in 30 seconds.\n\nPrice: $19",
+    "source_url": "https://www.agensi.io/skills/1-klick-magnet-website",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "synthesizing-institutional-knowledge",
+    "display_name": "Synthesizing Institutional Knowledge",
+    "description": "Build organizational memory systems that capture decision provenance and causal chains beyond simple RAG. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "前端",
+    "price": 50,
+    "original_price": 65,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "开发工具"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# synthesizing-institutional-knowledge\n\nBuild organizational memory systems that capture decision provenance and causal chains beyond simple RAG. Install in 30 seconds.\n\nPrice: $10",
+    "source_url": "https://www.agensi.io/skills/synthesizing-institutional-knowledge",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "designing-hybrid-context-layers",
+    "display_name": "Designing Hybrid Context Layers",
+    "description": "Design hybrid RAG and Knowledge Graph architectures to solve multi-hop and temporal query failures in AI agents. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "AI与LLM",
+    "price": 50,
+    "original_price": 65,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# designing-hybrid-context-layers\n\nDesign hybrid RAG and Knowledge Graph architectures to solve multi-hop and temporal query failures in AI agents. Install in 30 seconds.\n\nPrice: $10",
+    "source_url": "https://www.agensi.io/skills/designing-hybrid-context-layers",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "business-strategist",
+    "display_name": "Business Strategist",
+    "description": "Transform your AI agent into a senior management consultant with 25 business strategy frameworks for rigorous analysis. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "AI与LLM",
+    "price": 95,
+    "original_price": 123,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# business-strategist\n\nTransform your AI agent into a senior management consultant with 25 business strategy frameworks for rigorous analysis. Install in 30 seconds.\n\nPrice: $19",
+    "source_url": "https://www.agensi.io/skills/business-strategist",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "stock-breakout-picker",
+    "display_name": "Stock Breakout Picker",
+    "description": "Rank US and Swedish stock breakouts using Minervini, CAN SLIM, and VCP analysis. Get precise entries and risk-adjusted sizing. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "Git工具",
+    "price": 50,
+    "original_price": 65,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "开发工具"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# stock-breakout-picker\n\nRank US and Swedish stock breakouts using Minervini, CAN SLIM, and VCP analysis. Get precise entries and risk-adjusted sizing. Install in 30 seconds.\n\nPrice: $10",
+    "source_url": "https://www.agensi.io/skills/stock-breakout-picker",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "ai-automation-qa-pack",
+    "display_name": "Ai Automation Qa Pack",
+    "description": "Generate professional QA test matrices and Mesh Flow configs for AI automation agencies. Automate UAT documentation. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "测试",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "测试",
+      "文档",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# ai-automation-qa-pack\n\nGenerate professional QA test matrices and Mesh Flow configs for AI automation agencies. Automate UAT documentation. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/ai-automation-qa-pack",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "bounty-security-pattern-master-library-399-vulnerability-patterns",
+    "display_name": "Bounty Security Pattern Master Library 399 Vulnerability Patterns",
+    "description": "Audit code with 399 vulnerability patterns and DeFi attack vectors. Identify logic flaws and generate PoC heuristics. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "代码审查",
+    "price": 375,
+    "original_price": 487,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "安全",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# bounty-security-pattern-master-library-399-vulnerability-patterns\n\nAudit code with 399 vulnerability patterns and DeFi attack vectors. Identify logic flaws and generate PoC heuristics. Install in 30 seconds.\n\nPrice: $75",
+    "source_url": "https://www.agensi.io/skills/bounty-security-pattern-master-library-399-vulnerability-patterns",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "keyword-research",
+    "display_name": "Keyword Research",
+    "description": "Generate SEO keyword packs with Google Ads data and intent clustering from URLs or product lists. Automate content strategy. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "Git工具",
+    "price": 35,
+    "original_price": 45,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# keyword-research\n\nGenerate SEO keyword packs with Google Ads data and intent clustering from URLs or product lists. Automate content strategy. Install in 30 seconds.\n\nPrice: $7",
+    "source_url": "https://www.agensi.io/skills/keyword-research",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "skill-router",
+    "display_name": "Skill Router",
+    "description": "Automate skill discovery and multi-skill stacking for AI agents. Eliminate knowledge drift by routing tasks to custom SKILL.md. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "AI与LLM",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# skill-router\n\nAutomate skill discovery and multi-skill stacking for AI agents. Eliminate knowledge drift by routing tasks to custom SKILL.md. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/skill-router",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "market-tech-analyst",
+    "display_name": "Market Tech Analyst",
+    "description": "Analyze market size and technical feasibility for any product idea with measurable next-step recommendations. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "Git工具",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "开发工具"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# market-tech-analyst\n\nAnalyze market size and technical feasibility for any product idea with measurable next-step recommendations. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/market-tech-analyst",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "prompt-dataset-builder",
+    "display_name": "Prompt Dataset Builder",
+    "description": "Generate balanced LLM datasets with task taxonomy, edge cases, and metadata for fine-tuning or evaluation. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "前端",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# prompt-dataset-builder\n\nGenerate balanced LLM datasets with task taxonomy, edge cases, and metadata for fine-tuning or evaluation. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/prompt-dataset-builder",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "agentic-workflow",
+    "display_name": "Agentic Workflow",
+    "description": "Execute robust, risk-aware engineering tasks with an evidence-based protocol to prevent scope creep and bugs. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "Git工具",
+    "price": 25,
+    "original_price": 32,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "AI",
+      "自动化"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# agentic-workflow\n\nExecute robust, risk-aware engineering tasks with an evidence-based protocol to prevent scope creep and bugs. Install in 30 seconds.\n\nPrice: $5",
+    "source_url": "https://www.agensi.io/skills/agentic-workflow",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
+  },
+  {
+    "name": "endless-loop",
+    "display_name": "Endless Loop",
+    "description": "Run autonomous research loops that build on previous findings while you sleep. Perfect for deep dives and code optimization. Install in 30 seconds.",
+    "category": "Skill",
+    "sub_category": "前端",
+    "price": 60,
+    "original_price": 78,
+    "seller_name": "category",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=category",
+    "tags": [
+      "开发工具"
+    ],
+    "source_platform": "Agensi",
+    "github_url": "",
+    "content_preview": "# endless-loop\n\nRun autonomous research loops that build on previous findings while you sleep. Perfect for deep dives and code optimization. Install in 30 seconds.\n\nPrice: $12",
+    "source_url": "https://www.agensi.io/skills/endless-loop",
+    "version": "",
+    "crawled_at": "2026-09-04T12:40:16"
   },
   {
     "name": "env-doctor",
@@ -75,25 +514,6 @@
       "devops"
     ],
     "content_preview": "# env-doctor\n\nDiagnoses why your project will not start. Checks runtime versions, dependencies, environment variables, databases, ports, and build artifacts systematically.\n\n## Diagnostic Checklist\n1. Runtime version compatibility (Node, Python, Go, Java)\n2. Dependency installation and version conflicts\n3. Required environment variables (.env files)\n4. Database connection and migration status\n5. Port availability and conflicts\n6. Build artifacts and compilation errors\n\n## Example Output\n```\n[FAIL] Node.js version mismatch: expected >=18.0.0, found 16.20.0\n[WARN] Missing env var: DATABASE_URL\n[OK]   Port 3000 available"
-  },
-  {
-    "name": "pr-description-writer",
-    "display_name": "PR 描述生成器",
-    "description": "通过分析分支差异自动撰写清晰的 Pull Request 描述。涵盖变更内容、变更原因、变更方式和测试建议。支持 GitHub、GitLab 和 Bitbucket 平台。自动生成变更摘要、影响范围和测试检查清单。",
-    "category": "Skill",
-    "sub_category": "code-review",
-    "price": 0,
-    "original_price": 0,
-    "seller_name": "Samuel Rose",
-    "source_platform": "Agensi",
-    "github_url": "",
-    "tags": [
-      "pull-request",
-      "code-review",
-      "git",
-      "documentation"
-    ],
-    "content_preview": "# pr-description-writer\n\nWrites clear pull request descriptions by analyzing your branch diff. Covers what changed, why, how, and what to test.\n\n## Generated sections\n- Summary: High-level overview of changes\n- What changed: Detailed file-by-file breakdown\n- Why: Motivation and context\n- How to test: Testing checklist\n- Screenshots: UI change comparisons (if applicable)\n\n## Supported platforms\n- GitHub\n- GitLab\n- Bitbucket"
   },
   {
     "name": "dockerfile-gen",
@@ -152,24 +572,6 @@
       "api-development"
     ],
     "content_preview": "# api-designer\n\nProfessional API design and review skill for REST, GraphQL, and event-driven architectures.\n\n## Design Principles\n- Resource naming conventions (plural nouns, kebab-case)\n- Proper HTTP status codes for each operation\n- Pagination strategies (cursor-based, offset-based)\n- Filtering, sorting, and field selection\n- Consistent error response format (RFC 7807)\n- API versioning strategies\n- Rate limiting and throttling design\n\n## Review Checklist\n- Endpoint consistency and naming conventions\n- Request/response schema validation\n- Authentication and authorization patterns\n- Idempotency for PUT/DELETE operations"
-  },
-  {
-    "name": "prompt-engineer",
-    "display_name": "Prompt 工程专家",
-    "description": "专业的 Prompt 工程模式指南，用于构建健壮、安全且生产级的 LLM 应用。涵盖提示词设计、系统提示优化、少样本学习、链式思维、输出格式控制和安全防护等核心技巧。适用于构建 AI Agent、聊天机器人和自动化工作流。",
-    "category": "Skill",
-    "sub_category": "ai-ml",
-    "price": 0,
-    "original_price": 0,
-    "seller_name": "Roy Yuen",
-    "source_platform": "Agensi",
-    "github_url": "",
-    "tags": [
-      "prompt-engineering",
-      "llm-ops",
-      "ai-agents"
-    ],
-    "content_preview": "# prompt-engineer\n\nProfessional prompt engineering patterns for building robust, secure, and production-ready LLM applications.\n\n## Core Patterns\n- System prompt architecture\n- Few-shot learning templates\n- Chain-of-thought prompting\n- Output format control (JSON, XML, Markdown)\n- Safety guardrails and injection prevention\n- Token optimization strategies\n\n## Best Practices\n- Clear instruction hierarchy\n- Delimiter usage for structured input\n- Temperature and sampling guidelines\n- Prompt versioning and A/B testing"
   },
   {
     "name": "migration-auditor",
@@ -414,44 +816,6 @@
       "sprint-planning"
     ],
     "content_preview": "# sprint-planner\n\nAutomatically decompose complex epics into structured sprint tasks with story points, AC, and dependency maps.\n\n## Planning Process\n1. Parse epic description and acceptance criteria\n2. Identify user stories and technical tasks\n3. Estimate story points using Fibonacci scale\n4. Map dependencies between tasks\n5. Identify risks and blockers\n6. Generate sprint backlog with priorities\n\n## Output Format\n- Sprint backlog with task breakdown\n- Story point estimates\n- Dependency graph (Mermaid)\n- Risk register\n- Velocity projection\n- Capacity allocation recommendations"
-  },
-  {
-    "name": "seo-optimizer",
-    "display_name": "SEO 优化与合规检查器",
-    "description": "针对中文社交媒体的 SEO 优化和广告法合规检查工具。支持关键词密度分析、标题优化、Meta 标签生成和敏感词检测。自动检查内容是否符合《广告法》规定，避免使用违禁词汇。",
-    "category": "Skill",
-    "sub_category": "productivity",
-    "price": 0,
-    "original_price": 0,
-    "seller_name": "Roy Yuen",
-    "source_platform": "Agensi",
-    "github_url": "",
-    "tags": [
-      "seo",
-      "optimization",
-      "compliance",
-      "chinese-social-media"
-    ],
-    "content_preview": "# seo-optimizer\n\nSEO optimizer and banned-word scanner for Chinese social media. Keyword optimization and advertising law compliance.\n\n## Features\n- Keyword density analysis and suggestions\n- Title and heading optimization\n- Meta description generation\n- Internal linking recommendations\n- Chinese Advertising Law compliance check\n  - Absolute prohibited terms (最, 第一, etc.)\n  - Restricted claims requiring evidence\n  - Industry-specific regulations\n\n## Supported Platforms\n- 小红书 SEO\n- 微信公众号 SEO\n- 抖音搜索优化\n- 百度 SEO\n\n## Output\n- SEO score (0-100)\n- Keyword placement suggestions\n- Compliance warnings with law references"
-  },
-  {
-    "name": "humanize-writing",
-    "display_name": "AI 文本人性化改写",
-    "description": "将机械化的 AI 生成文本转化为自然、人类风格的流畅散文。保留原始信息的完整性和准确性，同时消除 AI 写作的典型特征（重复结构、过度正式、缺乏情感等）。支持中文和英文内容的人性化改写。",
-    "category": "Skill",
-    "sub_category": "productivity",
-    "price": 0,
-    "original_price": 0,
-    "seller_name": "Kevin Cline",
-    "source_platform": "Agensi",
-    "github_url": "",
-    "tags": [
-      "writing",
-      "editing",
-      "localization",
-      "ai-detection"
-    ],
-    "content_preview": "# humanize-writing\n\nTransform robotic AI drafts into natural, human-sounding prose with native-level flow and tone.\n\n## What it fixes\n- Repetitive sentence structures\n- Overly formal or academic tone\n- Generic transitions and filler phrases\n- Lack of voice and personality\n- Inconsistent tone across sections\n\n## Techniques\n- Vary sentence length and rhythm\n- Add conversational markers\n- Replace generic phrases with specific language\n- Introduce natural transitions\n- Adjust tone to match target audience\n\n## Detection Avoidance\n- Reduce predictability patterns\n- Add personal anecdotes and examples\n- Use idiomatic expressions appropriately"
   },
   {
     "name": "dependency-auditor",

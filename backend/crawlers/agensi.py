@@ -2,7 +2,7 @@ from __future__ import annotations
 """
 Agensi 爬虫
 数据源: https://www.agensi.io/skills
-策略: 抓取技能列表页 → 逐个获取详情
+策略: 抓取技能列表页 → 逐个获取详情（价格以详情页 JSON-LD offers 为准）
 """
 import re
 import json
@@ -12,6 +12,8 @@ from .base import BaseCrawler, CrawlerResult
 
 BASE_URL = "https://www.agensi.io"
 SKILLS_URL = f"{BASE_URL}/skills"
+# Convert USD → marketplace coins
+USD_TO_COINS = 5
 
 
 class AgensiCrawler(BaseCrawler):
@@ -26,85 +28,140 @@ class AgensiCrawler(BaseCrawler):
     def fetch_list(self) -> list[dict]:
         resp = self.client.get(SKILLS_URL)
         resp.raise_for_status()
-        html = resp.text
+        return self.parse_skills_html(resp.text)
 
+    def parse_skills_html(self, html: str) -> list[dict]:
+        """Parse Agensi /skills listing HTML into skill list items."""
         skills = []
         seen = set()
+        noise = {
+            "new", "popular", "trending", "free", "resources", "all",
+            "skills", "pricing", "about", "login", "signup", "search",
+            "browse", "agensi", "home", "docs", "blog",
+        }
 
-        # Parse skill cards from HTML
-        # Pattern: name, price (Free/$X), popularity, rating, description
-        # Try multiple patterns
-        patterns = [
-            r'([\w-]+)\s+(Free|\$\d+)\s+(.+?)(?:\s+\d+\s+\d+\s+[\d.]+)?',
-            r'"([\w-]+)"[^}]*?"price":\s*"(Free|\$\d+)"',
-            r'/skills/([\w-]+)',
-        ]
+        def _valid_slug(name: str) -> bool:
+            if not name or name.lower() in noise or len(name) < 3:
+                return False
+            if name.endswith("-") or name.startswith("-"):
+                return False
+            # Prefer real skill slugs: lowercase letters/digits/hyphens
+            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+                return False
+            return True
 
-        for pattern in patterns:
-            for match in re.finditer(pattern, html):
-                name = match.group(1)
-                if name in seen or len(name) < 3:
-                    continue
-                seen.add(name)
-                price_str = match.group(2) if len(match.groups()) > 1 else "Free"
-                desc = match.group(3).strip()[:200] if len(match.groups()) > 2 else ""
-                skills.append({
-                    "name": name,
-                    "price_str": price_str,
-                    "description": desc,
-                })
+        # ONLY accept real /skills/<slug> hrefs. Never invent slugs from Free/$X
+        # UI copy (e.g. "Browse Free Skills" → "rowse", "Agensi Free …" → "gensi").
+        for match in re.finditer(r'(?:href|src)=["\'](?:https?://(?:www\.)?agensi\.io)?/skills/([a-z0-9-]+)/?["\']', html, re.I):
+            name = match.group(1)
+            if name in seen or not _valid_slug(name):
+                continue
+            seen.add(name)
+            skills.append({"name": name, "price_str": "", "description": ""})
 
-        # Fallback: parse known skills from page content
-        if len(skills) < 10:
-            # Extract from the skills listing page content
-            for match in re.finditer(r'(/skills/)([\w-]+)', html):
-                name = match.group(2)
-                if name not in seen and name not in ("new", "popular", "trending"):
-                    seen.add(name)
-                    skills.append({"name": name, "price_str": "Free", "description": ""})
+        # Optional: attach Free/$X text ONLY onto href-discovered slugs (never create new names)
+        by_name = {s["name"]: s for s in skills}
+        for match in re.finditer(
+            r'([a-z0-9]+(?:-[a-z0-9]+)*)\s+(Free|\$\d+(?:\.\d+)?)\s+(.+?)(?:\s+\d+\s+\d+\s+[\d.]+)?',
+            html,
+        ):
+            name, price_str, desc = match.groups()
+            if name not in by_name:
+                continue
+            by_name[name]["price_str"] = price_str
+            if desc.strip():
+                by_name[name]["description"] = desc.strip()[:200]
 
+        if not skills:
+            raise RuntimeError("Agensi skills page parse returned 0 skills; site shape likely changed")
         return skills
 
     def fetch_detail(self, item: dict) -> Optional[CrawlerResult]:
         name = item["name"]
-        price_str = item.get("price_str", "Free")
-
-        # Parse price
-        if "Free" in price_str or price_str == "0":
-            price = 0
-        else:
-            try:
-                price = int(re.search(r'\d+', price_str).group())
-                # Convert USD to coins (1 USD ≈ 5 coins)
-                price = price * 5
-            except (AttributeError, ValueError):
-                price = 0
-
-        original_price = int(price * 1.3) if price > 0 else 0
-
-        # Try to fetch detail page
         detail_url = f"{BASE_URL}/skills/{name}"
         desc = item.get("description", "")
-        tags = []
+        tags: list[str] = []
         seller = "Agensi Creator"
+        detail_html = ""
 
         try:
             resp = self.client.get(detail_url, follow_redirects=True)
-            if resp.status_code == 200:
-                detail_html = resp.text
-                # Extract description
-                desc_match = re.search(r'<meta\s+name="description"\s+content="([^"]+)"', detail_html)
-                if desc_match:
-                    desc = desc_match.group(1)[:200]
-                # Extract tags
-                tag_matches = re.findall(r'>(\w[\w-]+)</a>\s*</div>\s*<div', detail_html)
-                tags = [t for t in tag_matches if len(t) > 2 and len(t) < 20][:5]
-                # Extract seller
-                seller_match = re.search(r'by\s+([\w\s]+?)(?:\s*[\·<])', detail_html)
-                if seller_match:
-                    seller = seller_match.group(1).strip()
-        except Exception:
-            pass
+            if resp.status_code != 200:
+                # Drop fabricated / dead slugs — do not persist 404s
+                print(f"[agensi] skip {name}: detail HTTP {resp.status_code}")
+                return None
+            detail_html = resp.text
+        except Exception as e:
+            print(f"[agensi] skip {name}: detail fetch error {e}")
+            return None
+
+        # Require a real product signal (JSON-LD Product/Offer or meta description)
+        if not self._is_valid_skill_detail(detail_html):
+            print(f"[agensi] skip {name}: detail missing Product JSON-LD / description")
+            return None
+
+        return self.build_result_from_detail(
+            item,
+            detail_html=detail_html,
+            detail_url=detail_url,
+            desc=desc,
+            tags=tags,
+            seller=seller,
+        )
+
+    @staticmethod
+    def _is_valid_skill_detail(html: str) -> bool:
+        if not html or len(html) < 200:
+            return False
+        if AgensiCrawler.extract_offers_price_usd(html) is not None:
+            return True
+        if re.search(r'<script[^>]*type=["\']application/ld\+json["\']', html, re.I):
+            # Any Product-like ld+json (free skills may omit offers.price)
+            blocks = re.findall(
+                r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+                html,
+                re.I | re.S,
+            )
+            for block in blocks:
+                if re.search(r'"@type"\s*:\s*"Product"', block) or '"offers"' in block:
+                    return True
+        if re.search(r'<meta\s+name="description"\s+content="[^"]{10,}"', html, re.I):
+            return True
+        return False
+
+    def build_result_from_detail(
+        self,
+        item: dict,
+        detail_html: str,
+        detail_url: str = "",
+        desc: str = "",
+        tags: list[str] | None = None,
+        seller: str = "Agensi Creator",
+    ) -> CrawlerResult:
+        """Normalize list item + detail HTML into a CrawlerResult (shipped persist path)."""
+        name = item["name"]
+        tags = list(tags or [])
+        list_price_str = item.get("price_str", "") or ""
+
+        if detail_html:
+            # Description from meta
+            desc_match = re.search(
+                r'<meta\s+name="description"\s+content="([^"]+)"',
+                detail_html,
+                re.I,
+            )
+            if desc_match:
+                desc = desc_match.group(1)[:200]
+            # Tags / seller heuristics
+            tag_matches = re.findall(r'>(\w[\w-]+)</a>\s*</div>\s*<div', detail_html)
+            tags = [t for t in tag_matches if len(t) > 2 and len(t) < 20][:5] or tags
+            seller_match = re.search(r'by\s+([\w\s]+?)(?:\s*[\·<])', detail_html)
+            if seller_match:
+                seller = seller_match.group(1).strip() or seller
+
+        usd_price, price_str = self._resolve_price(list_price_str, detail_html)
+        coins = self._usd_to_coins(usd_price)
+        original_price = int(coins * 1.3) if coins > 0 else 0
 
         display_name = self._to_display_name(name, desc)
         if not desc:
@@ -114,6 +171,9 @@ class AgensiCrawler(BaseCrawler):
         if not tags:
             tags = self._auto_tags(name, desc)
 
+        if not detail_url:
+            detail_url = f"{BASE_URL}/skills/{name}"
+
         return CrawlerResult(
             source="agensi",
             name=name,
@@ -121,7 +181,7 @@ class AgensiCrawler(BaseCrawler):
             description=desc,
             category="Skill",
             sub_category=sub_cat,
-            price=price,
+            price=coins,
             original_price=original_price,
             seller_name=seller,
             seller_avatar=f"https://api.dicebear.com/7.x/bottts/svg?seed={seller}",
@@ -131,7 +191,85 @@ class AgensiCrawler(BaseCrawler):
             content_preview=f"# {name}\n\n{desc}\n\nPrice: {price_str}",
             source_url=detail_url,
             version="",
+            extra={"usd_price": usd_price, "price_str": price_str},
         )
+
+    def _resolve_price(self, list_price_str: str, detail_html: str) -> tuple[float, str]:
+        """Prefer JSON-LD offers.price from detail HTML; fall back to list price_str."""
+        ld_usd = self.extract_offers_price_usd(detail_html) if detail_html else None
+        if ld_usd is not None:
+            if ld_usd <= 0:
+                return 0.0, "Free"
+            return float(ld_usd), f"${ld_usd:g}" if ld_usd != int(ld_usd) else f"${int(ld_usd)}"
+
+        return self._parse_price_str(list_price_str)
+
+    @staticmethod
+    def extract_offers_price_usd(html: str) -> Optional[float]:
+        """Extract schema.org Offer price (USD) from application/ld+json blocks."""
+        blocks = re.findall(
+            r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            html,
+            re.I | re.S,
+        )
+        for block in blocks:
+            try:
+                data = json.loads(block.strip())
+            except json.JSONDecodeError:
+                continue
+            price = AgensiCrawler._find_offer_price(data)
+            if price is not None:
+                return price
+        return None
+
+    @staticmethod
+    def _find_offer_price(node) -> Optional[float]:
+        if isinstance(node, list):
+            for item in node:
+                found = AgensiCrawler._find_offer_price(item)
+                if found is not None:
+                    return found
+            return None
+        if not isinstance(node, dict):
+            return None
+
+        offers = node.get("offers")
+        if isinstance(offers, dict) and "price" in offers:
+            try:
+                return float(offers["price"])
+            except (TypeError, ValueError):
+                pass
+        if isinstance(offers, list):
+            for offer in offers:
+                if isinstance(offer, dict) and "price" in offer:
+                    try:
+                        return float(offer["price"])
+                    except (TypeError, ValueError):
+                        continue
+
+        if "@graph" in node:
+            return AgensiCrawler._find_offer_price(node["@graph"])
+        return None
+
+    @staticmethod
+    def _parse_price_str(price_str: str) -> tuple[float, str]:
+        text = (price_str or "").strip()
+        if not text:
+            # Unknown until detail — treat as free only when explicitly Free/0
+            return 0.0, "Free"
+        if text.lower() == "free" or text == "0":
+            return 0.0, "Free"
+        match = re.search(r"(\d+(?:\.\d+)?)", text)
+        if not match:
+            return 0.0, text or "Free"
+        usd = float(match.group(1))
+        return usd, text if text.startswith("$") else f"${usd:g}"
+
+    @staticmethod
+    def _usd_to_coins(usd: float) -> int:
+        if usd <= 0:
+            return 0
+        return max(1, int(round(usd * USD_TO_COINS)))
 
     @staticmethod
     def _to_display_name(name: str, desc: str) -> str:

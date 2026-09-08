@@ -23,29 +23,41 @@ class BitMartSkillsCrawler(BaseCrawler):
     def fetch_list(self) -> list[dict]:
         resp = self.client.get(README_URL)
         resp.raise_for_status()
-        readme = resp.text
+        return self.parse_readme(resp.text)
+
+    def parse_readme(self, readme: str) -> list[dict]:
+        """Parse BitMart README markdown table into skill list items."""
+        import re
 
         skills = []
-        # Parse skill entries from README
-        import re
-        pattern = r'\|\s*`?([\w-]+)`?\s*\|\s*(.+?)\s*\|\s*`?([\d.]+)`?\s*\|\s*(\S+)\s*\|'
-        for match in re.finditer(pattern, readme):
-            name, desc, version, status = match.groups()
-            if name.startswith("---") or name.lower() in ("skill", "name"):
+        # Markdown table rows, name may be a link: | [name](#anchor) | desc | `ver` | status |
+        # Parse line-by-line so separator rows cannot swallow the next skill via \s newlines.
+        pattern = re.compile(
+            r"^\|\s*(?:\[`?([\w.-]+)`?\]\([^)]+\)|`([\w.-]+)`|([\w.-]+))\s*"
+            r"\|\s*([^|]+?)\s*"
+            r"\|\s*`?([\d.]+(?:-\d+)?)`?\s*"
+            r"\|\s*([^|]+)\|\s*$"
+        )
+        for line in readme.splitlines():
+            match = pattern.match(line.strip())
+            if not match:
+                continue
+            name = match.group(1) or match.group(2) or match.group(3)
+            if not name or re.fullmatch(r"-+", name) or name.lower() in ("skill", "name"):
+                continue
+            if not re.search(r"[A-Za-z]", name):
                 continue
             skills.append({
                 "name": name.strip(),
-                "description": desc.strip(),
-                "version": version.strip(),
-                "status": status.strip(),
+                "description": match.group(4).strip(),
+                "version": match.group(5).strip(),
+                "status": match.group(6).strip(),
             })
 
-        # Fallback if README parsing fails
         if not skills:
-            skills = [
-                {"name": "bitmart-exchange-spot", "description": "Spot trading: buy/sell, order management, account queries", "version": "2026.3.13", "status": "Active"},
-                {"name": "bitmart-exchange-futures", "description": "USDT perpetual futures: open/close position, TP/SL, plan orders", "version": "2026.3.13", "status": "Active"},
-            ]
+            raise RuntimeError(
+                "BitMart README table parse returned 0 skills; refusing hardcoded invent fallback"
+            )
         return skills
 
     def fetch_detail(self, item: dict) -> Optional[CrawlerResult]:
@@ -65,10 +77,17 @@ class BitMartSkillsCrawler(BaseCrawler):
             display_name = "BitMart 合约交易"
             tags = ["交易", "合约", "永续", "杠杆"]
             price, original = 99, 139
+            sub_category = "合约交易"
+        elif "wallet" in name_lower or "web3" in name_lower:
+            display_name = "BitMart Web3 钱包"
+            tags = ["钱包", "Web3", "链上", "智能资金"]
+            price, original = 89, 129
+            sub_category = "钱包"
         else:
             display_name = "BitMart 现货交易"
             tags = ["交易", "现货", "买卖", "订单"]
             price, original = 79, 109
+            sub_category = "现货交易"
 
         return CrawlerResult(
             source="bitmart",
@@ -76,7 +95,7 @@ class BitMartSkillsCrawler(BaseCrawler):
             display_name=display_name,
             description=item.get("description", display_name),
             category="Skill",
-            sub_category="现货交易" if "spot" in name_lower else "合约交易",
+            sub_category=sub_category,
             price=price,
             original_price=original,
             seller_name="BitMart",

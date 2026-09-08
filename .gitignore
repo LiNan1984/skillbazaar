@@ -7,6 +7,10 @@ frontend/dist/
 # Database
 *.db
 
+# Local runtime secrets / data
+backend/data/.shrimp_pond_key
+backend/data/
+
 # Python cache
 __pycache__/
 *.pyc

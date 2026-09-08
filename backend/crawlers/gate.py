@@ -5,7 +5,6 @@ Gate Skills Hub 爬虫
 策略: 解析 README 获取技能列表 → 逐个抓取 SKILL.md
 """
 import re
-import json
 import httpx
 from typing import Optional
 from .base import BaseCrawler, CrawlerResult
@@ -27,16 +26,16 @@ PRICE_MAP = {
     "default": (49, 129),
 }
 
-# 关键词 → 复杂度分类
+# 关键词 → 复杂度分类（installer 必须先于 simple，避免免费安装器被标成付费）
 COMPLEXITY_KEYWORDS = {
+    "installer": ["installer", "install"],
     "read-only": ["查询", "只读", "query", "read-only", "overview", "listing", "briefing"],
     "query": ["status", "balance", "fee", "rate", "check", "tracker", "scanner", "monitor"],
-    "simple": ["guide", "installer", "setup", "kyc", "portal"],
+    "simple": ["guide", "setup", "kyc", "portal"],
     "trading": ["trading", "trade", "buy", "sell", "swap", "spot", "futures", "position", "order"],
     "transaction": ["transfer", "pay", "payment", "send", "withdraw"],
     "analysis": ["analysis", "analyze", "overview", "compare", "trend", "risk", "sentiment"],
     "composite": ["manager", "research", "copilot", "end-to-end"],
-    "installer": ["installer", "install"],
 }
 
 
@@ -66,26 +65,36 @@ class GateSkillsCrawler(BaseCrawler):
         """从 README 解析技能列表"""
         resp = self.client.get(README_URL)
         resp.raise_for_status()
-        readme = resp.text
+        return self.parse_readme(resp.text)
 
-        # 提取技能表格行: | skill-name | description | version | status |
+    def parse_readme(self, readme: str) -> list[dict]:
+        """Parse Gate README markdown table into skill list items."""
+        # Markdown table rows, name may be a link: | [name](#anchor) | desc | `ver` | status |
+        # Parse line-by-line so separator rows cannot swallow the next skill via \s newlines.
         skills = []
-        # Format: | [gate-exchange-tradfi](#-gate-exchange-tradfi) | description | `version` | status |
-        pattern = r'\|\s*\[?`?([\w-]+)`?\]?\s*\|.*?\|\s*`?([\d.]+-?\d*)`?\s*\|\s*(\S+)\s*\|'
-        for match in re.finditer(pattern, readme):
-            name, version, status = match.groups()
-            if name.startswith("---") or name.lower() in ("skill", "name"):
+        pattern = re.compile(
+            r"^\|\s*(?:\[`?([\w.-]+)`?\]\([^)]+\)|`([\w.-]+)`|([\w.-]+))\s*"
+            r"\|\s*([^|]+?)\s*"
+            r"\|\s*`?([\d.]+(?:-\d+)?)`?\s*"
+            r"\|\s*([^|]+)\|\s*$"
+        )
+        for line in readme.splitlines():
+            match = pattern.match(line.strip())
+            if not match:
                 continue
-            # Extract description from the same line
-            line = match.group(0)
-            parts = line.split('|')
-            desc = parts[2].strip() if len(parts) > 2 else ""
+            name = match.group(1) or match.group(2) or match.group(3)
+            if not name or re.fullmatch(r"-+", name) or name.lower() in ("skill", "name"):
+                continue
+            if not re.search(r"[A-Za-z]", name):
+                continue
             skills.append({
                 "name": name.strip(),
-                "description": desc.strip(),
-                "version": version.strip(),
-                "status": status.strip(),
+                "description": match.group(4).strip(),
+                "version": match.group(5).strip(),
+                "status": match.group(6).strip(),
             })
+        if not skills:
+            raise RuntimeError("Gate README table parse returned 0 skills; parser likely broken")
         return skills
 
     def fetch_detail(self, item: dict) -> Optional[CrawlerResult]:

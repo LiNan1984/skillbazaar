@@ -8,16 +8,16 @@
     "price": 79,
     "original_price": 109,
     "seller_name": "BitMart",
-    "source_platform": "BitMart Skills",
-    "github_url": "https://github.com/bitmartexchange/bitmart-skills",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bitmart",
     "tags": [
       "交易",
       "现货",
       "买卖",
       "订单"
     ],
+    "source_platform": "BitMart Skills",
+    "github_url": "https://github.com/bitmartexchange/bitmart-skills",
     "content_preview": "---\nname: bitmart-exchange-spot\ndescription: \"Use when the user asks about BitMart spot trading or Spot WebSocket streams, including buying or selling crypto, placing limit/market/algo orders, checking spot balance, querying open orders, viewing trade history, managing margin positions, transferring between spot and fund accounts, querying or setting the deposit credited account, checking account and API key info, or streaming real-time spot ticker/book ticker/trades/private order progress/balance changes. Do NOT use for futures/contract trading (use bitmart-exchange-futures).\"\nhomepage: \"https://www.bitmart.com\"\nmetadata: {\"author\":\"bitmart\",\"version\":\"2026.7.14\",\"sdk_version\":\"1.4.0\",\"updated\":\"2026-07-14\"}\n---\n\n# BitMart Spot Trading\n\n## Overview\n\n| # | Category | API Endpoint | Type | Description |\n|---|----------|-------------|------|-------------|\n| 1 | Market Data | `GET /spot/quotation/v3/ticker` | READ | Get single pair ticker |\n| 2 | Market Data | `GET /spot/quotation/v3/tick",
-    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bitmart",
     "source_url": "https://github.com/bitmartexchange/bitmart-skills/tree/master/skills/bitmart-exchange-spot",
     "version": "2026.7.14",
     "crawled_at": "2026-09-04T12:25:15"
@@ -31,16 +31,16 @@
     "price": 99,
     "original_price": 139,
     "seller_name": "BitMart",
-    "source_platform": "BitMart Skills",
-    "github_url": "https://github.com/bitmartexchange/bitmart-skills",
+    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bitmart",
     "tags": [
       "交易",
       "合约",
       "永续",
       "杠杆"
     ],
+    "source_platform": "BitMart Skills",
+    "github_url": "https://github.com/bitmartexchange/bitmart-skills",
     "content_preview": "---\nname: bitmart-exchange-futures\ndescription: \"Use when the user asks about BitMart futures or contract trading or Futures WebSocket streams, including opening/closing positions, setting leverage, placing plan (conditional) orders, take-profit/stop-loss, trailing orders, checking futures positions, managing futures account, closing all positions in one click, fund ↔ futures account transfers, sub-account transfers, affiliate/rebate queries, simulated trading, or streaming real-time futures ticker/book ticker/trades/depth/funding-rate/private order/private position updates. Do NOT use for spot trading (use bitmart-exchange-spot).\"\nhomepage: \"https://www.bitmart.com\"\nmetadata: {\"author\":\"bitmart\",\"version\":\"2026.7.14\",\"sdk_version\":\"1.4.0\",\"updated\":\"2026-07-14\"}\n---\n\n# BitMart Futures Trading\n\n## Overview\n\n60 endpoints total. Table:\n\n| # | Category | API Endpoint | Type | Description |\n|---|----------|-------------|------|-------------|\n| 1 | Market Data | `GET /contract/public/detail",
-    "seller_avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bitmart",
     "source_url": "https://github.com/bitmartexchange/bitmart-skills/tree/master/skills/bitmart-exchange-futures",
     "version": "2026.7.14",
     "crawled_at": "2026-09-04T12:25:15"

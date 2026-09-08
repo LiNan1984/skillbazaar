@@ -21,9 +21,13 @@ from cryptography.fernet import Fernet
 import aiosqlite
 
 # --- 虾塘加密 (Shrimp Pond Encryption) ---
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DATA_DIR = os.path.join(_BACKEND_DIR, "data")
+os.makedirs(_DATA_DIR, exist_ok=True)
+
 SHRIMP_POND_KEY = os.environ.get("SHRIMP_POND_KEY", "").strip()
 if not SHRIMP_POND_KEY:
-    _key_path = "/root/skillbazaar/backend/data/.shrimp_pond_key"
+    _key_path = os.path.join(_DATA_DIR, ".shrimp_pond_key")
     if os.path.exists(_key_path):
         with open(_key_path) as f:
             SHRIMP_POND_KEY = f.read().strip()
