@@ -1215,6 +1215,41 @@ class TrialCleanupResponse(BaseModel):
 
 
 # ===========================================================================
+# v4.11 – Bulk Trial
+# ===========================================================================
+
+
+class BulkTrialRequest(BaseModel):
+    product_ids: list[int]
+    input_text: str = ""
+
+
+class BulkTrialResult(BaseModel):
+    product_id: int
+    product_name: str
+    status: str  # "completed" | "failed" | "skipped"
+    output_text: str | None = None
+    error_message: str | None = None
+    tokens_used: int = 0
+    execution_time_ms: int = 0
+    trial_id: int | None = None
+    skip_reason: str | None = None
+
+
+class BulkTrialResponse(BaseModel):
+    total: int
+    succeeded: int
+    skipped: int
+    results: list[BulkTrialResult]
+
+
+class BulkTrialEligibilityResponse(BaseModel):
+    eligible_count: int
+    total_count: int
+    products: list[dict]
+
+
+# ===========================================================================
 # v4.10 – Comparison Tool
 # ===========================================================================
 

@@ -150,3 +150,143 @@ async def cleanup_old_trials(days: int = 30) -> dict:
         "deleted_count": deleted_count,
         "message": f"Cleaned up {deleted_count} old trial runs",
     }
+
+
+MAX_BULK_PRODUCTS = 5
+
+
+async def get_bulk_trial_eligibility(user_id: str, product_ids: list[int]) -> dict:
+    """Check eligibility for each product in a bulk trial request.
+
+    Returns dict with eligible_count, total_count, and products list.
+    Each product entry has: product_id, product_name, can_trial, reason, trials_remaining.
+    """
+    products = []
+    eligible_count = 0
+
+    for pid in product_ids:
+        product = await db.fetch_product_by_id(pid)
+        if not product:
+            products.append({
+                "product_id": pid,
+                "product_name": "",
+                "can_trial": False,
+                "reason": "商品不存在",
+                "trials_remaining": 0,
+            })
+            continue
+
+        if product.get("status") != "active":
+            products.append({
+                "product_id": pid,
+                "product_name": product.get("name", ""),
+                "can_trial": False,
+                "reason": "商品不支持试用",
+                "trials_remaining": 0,
+            })
+            continue
+
+        already_purchased = await db.check_already_purchased(user_id, pid)
+        if already_purchased:
+            products.append({
+                "product_id": pid,
+                "product_name": product.get("name", ""),
+                "can_trial": False,
+                "reason": "已购买此商品",
+                "trials_remaining": 0,
+            })
+            continue
+
+        trial_count = await db.count_trial_runs_by_user_and_product(user_id, pid)
+        remaining = max(0, MAX_TRIALS_PER_PRODUCT - trial_count)
+        if remaining <= 0:
+            products.append({
+                "product_id": pid,
+                "product_name": product.get("name", ""),
+                "can_trial": False,
+                "reason": "试用次数已达上限",
+                "trials_remaining": 0,
+            })
+            continue
+
+        eligible_count += 1
+        products.append({
+            "product_id": pid,
+            "product_name": product.get("name", ""),
+            "can_trial": True,
+            "reason": None,
+            "trials_remaining": remaining,
+        })
+
+    return {
+        "eligible_count": eligible_count,
+        "total_count": len(product_ids),
+        "products": products,
+    }
+
+
+async def run_bulk_trial(user_id: str, product_ids: list[int], input_text: str) -> dict:
+    """Execute bulk trial runs for up to 5 products.
+
+    Returns aggregate results with per-product status.
+    Skips products that are ineligible (purchased, limit reached).
+    """
+    eligibility = await get_bulk_trial_eligibility(user_id, product_ids)
+
+    results = []
+    succeeded = 0
+    skipped = 0
+
+    for product_info in eligibility["products"]:
+        pid = product_info["product_id"]
+
+        if not product_info["can_trial"]:
+            skipped += 1
+            results.append({
+                "product_id": pid,
+                "product_name": product_info["product_name"],
+                "status": "skipped",
+                "output_text": None,
+                "error_message": None,
+                "tokens_used": 0,
+                "execution_time_ms": 0,
+                "trial_id": None,
+                "skip_reason": product_info["reason"],
+            })
+            continue
+
+        try:
+            trial_result = await run_trial(user_id, pid, input_text)
+            succeeded += 1
+            results.append({
+                "product_id": pid,
+                "product_name": trial_result.get("product_name", product_info["product_name"]),
+                "status": "completed",
+                "output_text": trial_result.get("output_text"),
+                "error_message": None,
+                "tokens_used": trial_result.get("tokens_used", 0),
+                "execution_time_ms": trial_result.get("execution_time_ms", 0),
+                "trial_id": trial_result.get("trial_id") or trial_result.get("id"),
+                "skip_reason": None,
+            })
+        except ValueError as e:
+            # Execution failed (shouldn't happen since eligibility check passed,
+            # but handle gracefully)
+            results.append({
+                "product_id": pid,
+                "product_name": product_info["product_name"],
+                "status": "failed",
+                "output_text": None,
+                "error_message": str(e),
+                "tokens_used": 0,
+                "execution_time_ms": 0,
+                "trial_id": None,
+                "skip_reason": None,
+            })
+
+    return {
+        "total": len(product_ids),
+        "succeeded": succeeded,
+        "skipped": skipped,
+        "results": results,
+    }
