@@ -45,6 +45,7 @@ async def _create_tables(db: aiosqlite.Connection):
             github_url TEXT,
             icon TEXT,
             content_preview TEXT,
+            compat TEXT,  -- JSON array of runtime compat strings, NULL if not set
             status TEXT DEFAULT 'active',
             created_at TEXT
         );
@@ -114,6 +115,19 @@ async def _create_tables(db: aiosqlite.Connection):
             output_summary TEXT,
             duration_ms INTEGER,
             status TEXT DEFAULT 'success',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS skill_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            eval_score INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            eval_version INTEGER DEFAULT 1,
+            flags TEXT DEFAULT '[]',
+            static_flags TEXT DEFAULT '[]',
+            sample_output TEXT,
+            reason TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
 
@@ -391,6 +405,39 @@ async def _create_tables(db: aiosqlite.Connection):
             status TEXT DEFAULT 'success',
             created_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (agent_id) REFERENCES user_agents(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS product_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            user_id TEXT NOT NULL REFERENCES users(id),
+            order_ref TEXT,
+            rating INTEGER NOT NULL,
+            content TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(product_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            role TEXT NOT NULL,
+            content TEXT DEFAULT '',
+            card TEXT,
+            thread_id TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS sandbox_sessions (
+            sandbox_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            language TEXT DEFAULT 'python',
+            image TEXT DEFAULT 'python:3.11-slim',
+            status TEXT DEFAULT 'running',
+            created_at TEXT DEFAULT (datetime('now')),
+            expires_at TEXT,
+            timeout INTEGER DEFAULT 3600,
+            pid INTEGER
         );
     """)
     await db.commit()
@@ -843,6 +890,10 @@ async def _seed_products(db: aiosqlite.Connection):
         await db.execute("ALTER TABLE products ADD COLUMN demand_score REAL DEFAULT 0")
     except Exception:
         pass
+    try:
+        await db.execute("ALTER TABLE users ADD COLUMN sandbox_quota INTEGER DEFAULT 3600")
+    except Exception:
+        pass
     await db.commit()
 
 
@@ -857,6 +908,7 @@ async def fetch_products(
     sort_by: str = "downloads",
     page: int = 1,
     page_size: int = 20,
+    runtime: str | None = None,
 ) -> tuple[list[dict], int]:
     db = await get_db()
     try:
@@ -879,6 +931,10 @@ async def fetch_products(
         if max_price is not None:
             conditions.append("price <= ?")
             params.append(max_price)
+        if runtime:
+            # Filter by compat JSON containing the runtime value
+            conditions.append("compat LIKE ?")
+            params.append(f'%"{runtime}"%')
 
         where = " AND ".join(conditions)
 
@@ -925,15 +981,16 @@ async def insert_product(data: dict) -> int:
             INSERT INTO products (
                 name, description, category, sub_category, price, original_price,
                 seller_name, seller_avatar, tags, source_platform, github_url,
-                icon, content_preview, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                icon, content_preview, compat, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["name"], data["description"], data["category"],
                 data.get("sub_category"), data["price"], data.get("original_price"),
                 data["seller_name"], data.get("seller_avatar"), data.get("tags", "[]"),
                 data.get("source_platform"), data.get("github_url"),
-                data.get("icon"), data.get("content_preview"), "active",
+                data.get("icon"), data.get("content_preview"),
+                data.get("compat"), "active",
                 datetime.now().isoformat(),
             ),
         )
@@ -1189,6 +1246,18 @@ async def fetch_license_by_token(token: str) -> dict | None:
     try:
         cursor = await db.execute(
             "SELECT * FROM licenses WHERE license_token = ? AND status = 'active'", (token,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_license_by_id(license_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM licenses WHERE id = ? AND status = 'active'", (license_id,)
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
@@ -2492,5 +2561,273 @@ async def fetch_agent_runs(agent_id: int, limit: int = 20) -> list[dict]:
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+# ---- Product Review Helpers ----
+
+async def user_has_purchased_product(user_id: str, product_id: int) -> bool:
+    """Eligible to review: completed purchase OR an active license."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """
+            SELECT 1 FROM transactions
+            WHERE buyer_id = ? AND product_id = ? AND type = 'buy' AND status = 'completed'
+            UNION ALL
+            SELECT 1 FROM licenses
+            WHERE user_id = ? AND product_id = ? AND status = 'active'
+            LIMIT 1
+            """,
+            (user_id, product_id, user_id, product_id),
+        )
+        row = await cursor.fetchone()
+        return row is not None
+    finally:
+        await db.close()
+
+
+async def fetch_product_review(product_id: int, user_id: str) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM product_reviews WHERE product_id = ? AND user_id = ?",
+            (product_id, user_id),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def insert_product_review(data: dict) -> int:
+    """Insert a review and recompute products.rating in one transaction."""
+    db = await get_db()
+    try:
+        now = datetime.now().isoformat()
+        cursor = await db.execute(
+            """
+            INSERT INTO product_reviews (product_id, user_id, order_ref, rating, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (data["product_id"], data["user_id"], data.get("order_ref"),
+             data["rating"], data.get("content", ""), now),
+        )
+        review_id = cursor.lastrowid
+        await db.execute(
+            """
+            UPDATE products
+            SET rating = (SELECT ROUND(AVG(rating), 2) FROM product_reviews WHERE product_id = ?)
+            WHERE id = ?
+            """,
+            (data["product_id"], data["product_id"]),
+        )
+        await db.commit()
+        return review_id
+    finally:
+        await db.close()
+
+
+async def fetch_product_reviews(product_id: int, page: int = 1, page_size: int = 10) -> tuple[list[dict], int]:
+    db = await get_db()
+    try:
+        count_cursor = await db.execute(
+            "SELECT COUNT(*) FROM product_reviews WHERE product_id = ?",
+            (product_id,),
+        )
+        total = (await count_cursor.fetchone())[0]
+
+        offset = (page - 1) * page_size
+        cursor = await db.execute(
+            """
+            SELECT r.*, u.nickname, u.avatar
+            FROM product_reviews r
+            LEFT JOIN users u ON r.user_id = u.id
+            WHERE r.product_id = ?
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (product_id, page_size, offset),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows], total
+    finally:
+        await db.close()
+
+
+async def fetch_review_summary(product_id: int) -> dict:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(rating), 2), 0) AS avg_rating "
+            "FROM product_reviews WHERE product_id = ?",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        return {"total": row[0], "avg_rating": row[1]}
+    finally:
+        await db.close()
+
+
+async def fetch_user_by_name(name: str) -> dict | None:
+    """Resolve a user by username or nickname (products only carry seller_name)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM users WHERE username = ? OR nickname = ? LIMIT 1",
+            (name, name),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+# ---- Chat Message Helpers ----
+
+async def insert_chat_message(data: dict):
+    db = await get_db()
+    try:
+        card = data.get("card")
+        if card is not None and not isinstance(card, str):
+            card = json.dumps(card, ensure_ascii=False)
+        now = datetime.now().isoformat()
+        cursor = await db.execute(
+            """
+            INSERT INTO chat_messages (user_id, role, content, card, thread_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (data["user_id"], data["role"], data.get("content", ""),
+             card, data.get("thread_id"), now),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def fetch_chat_messages(user_id: str, limit: int = 20) -> list[dict]:
+    """Return the latest `limit` messages for a user, ordered oldest -> newest."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """
+            SELECT * FROM (
+                SELECT * FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT ?
+            ) ORDER BY id ASC
+            """,
+            (user_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def clear_chat_messages(user_id: str) -> int:
+    db = await get_db()
+    try:
+        cursor = await db.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+        await db.commit()
+        return cursor.rowcount
+    finally:
+        await db.close()
+
+
+# ---------- Eval Report Helpers ----------
+
+async def fetch_eval_report(product_id: int) -> dict | None:
+    """Get the latest eval report for a product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM skill_evaluations
+            WHERE product_id = ?
+            ORDER BY id DESC LIMIT 1""",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def upsert_eval_report(data: dict) -> int:
+    """Insert a new eval report row (appends, version bumps in caller)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """
+            INSERT INTO skill_evaluations (
+                product_id, eval_score, status, eval_version,
+                flags, static_flags, sample_output, reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["product_id"],
+                data.get("eval_score", 0),
+                data.get("status", "pending"),
+                data.get("eval_version", 1),
+                json.dumps(data.get("flags", [])),
+                json.dumps(data.get("static_flags", [])),
+                data.get("sample_output", ""),
+                data.get("reason"),
+            ),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+# ---------- Compat Helpers ----------
+
+async def fetch_products_by_runtime(runtime: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """Filter products by compat runtime(s). Returns (products, total_count).
+
+    Accepts single runtime or comma-separated values (e.g. "claude-code" or
+    "claude-code,codex").  Each runtime is matched against the compat JSON
+    column using LIKE patterns that handle both quoted and bare values.
+    """
+    db = await get_db()
+    try:
+        runtimes = [r.strip() for r in runtime.split(",") if r.strip()]
+        if not runtimes:
+            # No valid runtimes → return empty
+            return [], 0
+
+        # Build WHERE clause: (compat LIKE ? OR compat LIKE ? ...) for each runtime
+        like_patterns = []
+        params = []
+        for rt in runtimes:
+            like_patterns.append(
+                "(compat LIKE ? OR compat LIKE ? OR compat LIKE ?)"
+            )
+            params.extend([f'%"{rt}"%', f'%"{rt}"%', f'%{rt}%'])
+
+        where_clause = " OR ".join(like_patterns)
+
+        # Count total matching
+        count_cursor = await db.execute(
+            f"""SELECT COUNT(*) as cnt FROM products
+            WHERE status = 'active'
+            AND ({where_clause})""",
+            params,
+        )
+        count_row = await count_cursor.fetchone()
+        total = count_row["cnt"] if count_row else 0
+
+        # Fetch page
+        offset = (page - 1) * page_size
+        cursor = await db.execute(
+            f"""SELECT * FROM products
+            WHERE status = 'active'
+            AND ({where_clause})
+            ORDER BY id DESC LIMIT ? OFFSET ?""",
+            (*params, page_size, offset),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows], total
     finally:
         await db.close()

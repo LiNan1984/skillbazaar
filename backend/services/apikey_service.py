@@ -3,12 +3,14 @@ API Key Management Service — 开发者API密钥管理
 用户可申请API Key，外部通过OpenAI兼容协议调用其Agent
 """
 from __future__ import annotations
+
+import os
 import time
 import uuid
 import secrets
 import aiosqlite
 
-DB_PATH = "/root/skillbazaar/backend/data/skillbazaar.db"
+DB_PATH = os.environ.get("SKBZ_DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "skillbazaar.db"))
 
 
 async def _get_db():

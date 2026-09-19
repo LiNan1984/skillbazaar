@@ -68,6 +68,7 @@ class ProductCreate(BaseModel):
     github_url: Optional[str] = None
     icon: Optional[str] = None
     content_preview: Optional[str] = None
+    compat: Optional[str] = None  # JSON array of runtime strings
 
 
 class ProductResponse(BaseModel):
@@ -88,8 +89,10 @@ class ProductResponse(BaseModel):
     github_url: Optional[str] = None
     icon: Optional[str] = None
     content_preview: Optional[str] = None
+    compat: Optional[str] = None  # JSON array of runtime strings
     status: str
     created_at: Optional[str] = None
+    eval_report: Optional[dict] = None  # Latest evaluation report
 
 
 class ProductList(BaseModel):
@@ -97,6 +100,17 @@ class ProductList(BaseModel):
     page: int
     page_size: int
     products: List[ProductResponse]
+
+
+class EvalReportResponse(BaseModel):
+    product_id: int
+    eval_score: int
+    status: str
+    eval_version: int
+    flags: List[str] = []
+    static_flags: List[str] = []
+    sample_output: Optional[str] = None
+    reason: Optional[str] = None
 
 
 # ---------- User Models ----------
@@ -136,7 +150,8 @@ class Transaction(BaseModel):
 
 
 class TransactionCreate(BaseModel):
-    buyer_id: str
+    # Identity comes from the Bearer token; buyer_id in the body is deprecated
+    # and ignored (kept tolerant so legacy clients get a clean 401, not a 422).
     product_id: int
 
 
@@ -151,17 +166,33 @@ class TransactionResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+# ---------- Product Reviews ----------
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5, strict=True)
+    content: str = Field("", max_length=500)
+
+
 # ---------- Chat Models ----------
 
 class ChatRequest(BaseModel):
     message: str
-    user_id: str
+    user_id: Optional[str] = None  # kept for backward compat; identity comes from Bearer token
     card: Optional[dict] = None
+
+
+class ChatProductCard(BaseModel):
+    id: int
+    name: str
+    category: Optional[str] = None
+    price: Optional[int] = None
+    rating: Optional[float] = None
+    description: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     reply: str
-    products: List[ProductResponse] = []
+    products: List[ChatProductCard] = []
     card: Optional[dict] = None
 
 
@@ -204,7 +235,7 @@ class SkillAssetResponse(BaseModel):
 
 class SkillExecutionRequest(BaseModel):
     product_id: int
-    user_id: str
+    user_id: Optional[str] = None
     input_params: Optional[str] = None
 
 
@@ -267,6 +298,7 @@ class AuthResponse(BaseModel):
     nickname: str
     token: str
     coins: int = 10000
+    role: str = "user"
 
 
 # ---------- Profile Models ----------
