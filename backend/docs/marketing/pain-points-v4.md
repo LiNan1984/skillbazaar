@@ -37,7 +37,7 @@
 **SkillBazaar 对策**: 静态检查 + LLM 烟雾测试双重评估（eval_service.py），注入模式检测，完整性校验（SHA-256 hash）。
 
 **改进建议**:
-- 评估分数在搜索结果中显性展示（星级/徽章）
+- ✅ **评估分数在搜索结果中显性展示（v4.8 已完成）** — 星级/徽章
 - 引入"平台认证"标签（通过评估阈值的高质量 Skill）
 - 增加社区举报和人工复核机制
 - 定期自动重新评估（cron job）
@@ -411,16 +411,19 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ### P0 — 立即做（直接影响转化）
 
-1. **搜索结果展示 eval_score 徽章** — 提升买家信任
+1. ~~**搜索结果展示 eval_score 徽章**~~ ✅ v4.8 完成
 2. **商品详情页增加一键试运行** — 降低购买决策门槛
 3. **卖家数据面板 MVP** — 基础数据（曝光/下载/收入）
 
 ### P1 — 近期做（提升体验和留存）
 
-4. **语义搜索/向量检索** — 提升搜索精准度
-5. **智能定价建议** — 帮助卖家定价
-6. **新品流量扶持** — 冷启动机制
-7. **Skill 版本管理** — SemVer + 更新通知
+4. ~~**语义搜索/向量检索**~~ ✅ v4.5 完成
+5. ~~**智能定价建议**~~ ✅ v4.5.1 完成
+6. ~~**新品流量扶持**~~ ✅ v4.6 完成
+7. ~~**Skill 版本管理**~~ ✅ v4.1.1 完成
+8. ~~**搜索结果展示 eval_score 徽章**~~ ✅ v4.8 完成
+9. **商品详情页增加一键试运行** — 降低购买决策门槛
+10. **卖家数据面板 MVP** — 基础数据（曝光/下载/收入）
 
 ### P2 — 中期做（构建壁垒）
 
@@ -563,20 +566,30 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - 卖家订阅数据分析 | | | |
 | - Cron 订阅处理 | | | |
 
-### v4.8+ 计划中功能 📋
+### v4.8 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Eval Score Badges** | v4.8.0 | ✅ 完成 | 8/8 通过 | f6329a5 |
+| - 搜索结果显示评估徽章 | | | | |
+| - 颜色分级 (A+/B+/C+/D) | | | | |
+| - 按评估分数筛选和排序 | | | | |
+
+### v4.9+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
-| Comparison Tool | v4.8.0 | P2 |
-| Mobile/PWA | v4.9.0 | P2 |
-| Eval Score Badges in Search | v4.8.0 | P1 |
-| One-Click Trial Run | v4.8.0 | P1 |
+| One-Click Trial Run | v4.9.0 | P1 |
+| Comparison Tool | v4.9.0 | P2 |
+| Mobile/PWA | v4.10.0 | P2 |
 
 ### 迭代统计
 
-- **迭代次数**: 12+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription）
-- **测试覆盖率**: 171/171 (100%)
-- **代码提交**: 9 次
+- **迭代次数**: 13+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription → v4.8.0 Eval Score Badges）
+- **测试覆盖率**: 189/189 (100%)
+- **代码提交**: 11 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
