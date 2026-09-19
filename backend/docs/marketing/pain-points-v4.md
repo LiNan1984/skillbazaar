@@ -471,9 +471,10 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 | 功能 | 预计完成 | 负责 Agent | 依赖 |
 |------|---------|-----------|------|
-| Skill Versioning | v4.1.1 | DEV | - |
-| Seller Analytics | v4.2.0 | DEV | Skill Versioning |
-| Payment Integration | v4.2.0 | DEV | - |
+| Skill Versioning | v4.1.1 | ✅ 完成 | 12/12 通过 | 5e0abfd |
+| Seller Analytics | v4.2.0 | ✅ 完成 | 7/7 通过 | 17d3132 |
+| - 销售数据看板（总览/产品/导出） | | | | |
+| Payment Integration | v4.2.0 | 🔄 进行中 | - | - |
 
 ### 计划中功能 📋
 
@@ -487,8 +488,8 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 ### 迭代统计
 
 - **迭代次数**: 3+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → ...）
-- **测试覆盖率**: 97/115 (84.3%)
-- **代码提交**: 3 次（feat: user profiles v4, test: baseline, feat: skill versioning）
+- **测试覆盖率**: 111/139 (79.9%)
+- **代码提交**: 5 次（feat: user profiles v4, test: baseline, feat: skill versioning, feat: seller analytics, test: payment integration）
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
