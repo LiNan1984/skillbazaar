@@ -604,13 +604,24 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - Eval badge 对比 | | | | |
 | - Compare API (GET /api/v4/compare) | | | | |
 
-### v4.11+ 计划中功能 📋
+### v4.11 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Bulk Trial** | v4.11.0 | ✅ 完成 | 17/17 通过 | 010579a |
+| - 批量试用最多 5 个 Skill | | | | |
+| - POST /api/v4/trial/bulk | | | | |
+| - GET /api/v4/trial/bulk/eligibility | | | | |
+| - 自动跳过已购/已达上限产品 | | | | |
+
+### v4.12+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 | 状态 |
 |------|------|--------|------|
-| Bulk Trial (批量试用) | v4.11.0 | P2 | 🔄 开发中 |
-| Mobile/PWA | v4.12.0 | P2 | 📋 计划中 |
-| Bulk Operations (批量管理) | v4.12.0 | P2 | 📋 计划中 |
+| Bulk Operations (批量管理) | v4.12.0 | P2 | 🔄 开发中 |
+| Mobile/PWA | v4.13.0 | P2 | 📋 计划中 |
 
 ### 迭代统计
 

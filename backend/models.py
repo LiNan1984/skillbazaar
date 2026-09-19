@@ -1276,6 +1276,40 @@ class CompareResponse(BaseModel):
     comparison_matrix: dict | None = None
 
 
+# ===========================================================================
+# v4.12 – Bulk Operations
+# ===========================================================================
+
+
+class BulkOperationRequest(BaseModel):
+    operation: str  # "publish" | "unpublish" | "price_update" | "delete"
+    product_ids: list[int]
+    params: dict | None = None
+
+
+class BulkOperationResult(BaseModel):
+    product_id: int
+    status: str  # "success" | "failed"
+    message: str
+
+
+class BulkOperationResponse(BaseModel):
+    operation_id: int
+    operation: str
+    status: str  # "completed" | "failed" | "partial"
+    total: int
+    succeeded: int
+    failed: int
+    results: list[BulkOperationResult]
+
+
+class BulkOperationHistoryResponse(BaseModel):
+    operations: list[dict]
+    total: int
+    page: int
+    limit: int
+
+
 class ComparisonSaveRequest(BaseModel):
     product_ids: list[int]
     name: str | None = None

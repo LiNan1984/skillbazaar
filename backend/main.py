@@ -31,6 +31,7 @@ from routers.subscription_v4 import router as subscription_v4_router
 from routers.trial_v4 import router as trial_v4_router
 from routers.bulk_trial_v4 import router as bulk_trial_v4_router
 from routers.compare_v4 import router as compare_v4_router
+from routers.bulk_operations_v4 import router as bulk_operations_v4_router
 
 
 @asynccontextmanager
@@ -89,6 +90,7 @@ app.include_router(subscription_v4_router)
 app.include_router(trial_v4_router)
 app.include_router(bulk_trial_v4_router)
 app.include_router(compare_v4_router)
+app.include_router(bulk_operations_v4_router)
 
 
 @app.get("/")

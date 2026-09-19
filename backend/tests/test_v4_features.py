@@ -61,6 +61,10 @@ def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _x_user_id(user_id: str) -> dict:
+    return {"X-User-Id": user_id}
+
+
 async def _fetchall(sql: str, params=()):
     conn = await aiosqlite.connect(db_mod.DB_PATH)
     try:
@@ -92,7 +96,7 @@ class _V4Base(unittest.TestCase):
                             "wishlist_items", "affiliate_conversions",
                             "affiliate_clicks", "affiliate_links",
                             "subscriptions", "subscription_events",
-                            "trial_runs",
+                            "trial_runs", "bulk_operations",
                             "products", "product_embeddings"):
                     try:
                         await conn.execute(f"DELETE FROM {tbl}")
@@ -3497,3 +3501,422 @@ class TestComparisonTool(_V4Base):
         self.assertEqual(len(matrix["eval_score"]), 1)
         self.assertEqual(len(matrix["sales"]), 1)
         self.assertEqual(len(matrix["downloads"]), 1)
+
+
+# ===========================================================================
+# v4.12 – Bulk Operations  (BO-01 … BO-10)
+# ===========================================================================
+
+class TestBulkOperations(_V4Base):
+    """Bulk product management: publish, unpublish, price update, soft delete.
+
+    Auth: X-User-Id header (user UUID).
+    Ownership: product.seller_name must match user.nickname.
+    Status: 'active' = published, 'inactive' = unpublished/deleted.
+    """
+
+    # ---- BO-01 ----
+    def test_bulk_publish_products(self):
+        """Publishing multiple inactive products sets status='active'
+        for all of them and returns success results."""
+        seller = self._register("bo01_seller", "卖家BO01")
+
+        # Create 3 inactive (unpublished) products directly in DB
+        p1 = self._make_product_db(seller["nickname"], "BO01 商品A", price=100,
+                                   status="inactive")
+        p2 = self._make_product_db(seller["nickname"], "BO01 商品B", price=200,
+                                   status="inactive")
+        p3 = self._make_product_db(seller["nickname"], "BO01 商品C", price=300,
+                                   status="inactive")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "publish",
+                "product_ids": [p1["id"], p2["id"], p3["id"]],
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["operation"], "publish")
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 3)
+        self.assertEqual(body["failed"], 0)
+        self.assertEqual(body["status"], "completed")
+        self.assertEqual(len(body["results"]), 3)
+
+        results_by_pid = {res["product_id"]: res for res in body["results"]}
+        for pid in (p1["id"], p2["id"], p3["id"]):
+            self.assertEqual(results_by_pid[pid]["status"], "success")
+            self.assertIn("已发布", results_by_pid[pid]["message"])
+
+        # Verify DB: all products now have status='active'
+        for pid in (p1["id"], p2["id"], p3["id"]):
+            row = self._db_product(pid)
+            self.assertIsNotNone(row)
+            self.assertEqual(row["status"], "active")
+
+    # ---- BO-02 ----
+    def test_bulk_unpublish_products(self):
+        """Unpublishing multiple active products sets status='inactive'
+        for all of them."""
+        seller = self._register("bo02_seller", "卖家BO02")
+
+        # Create active (published) products
+        p1 = self._publish(seller["nickname"], "BO02 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO02 商品B", price=200,
+                           category="Skill")
+        p3 = self._publish(seller["nickname"], "BO02 商品C", price=300,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "unpublish",
+                "product_ids": [p1["id"], p2["id"], p3["id"]],
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["operation"], "unpublish")
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 3)
+        self.assertEqual(body["failed"], 0)
+
+        # Verify DB: all products now have status='inactive'
+        for pid in (p1["id"], p2["id"], p3["id"]):
+            row = self._db_product(pid)
+            self.assertIsNotNone(row)
+            self.assertEqual(row["status"], "inactive")
+
+    # ---- BO-03 ----
+    def test_bulk_price_update_percentage(self):
+        """Updating prices by percentage applies the correct new prices
+        to all products."""
+        seller = self._register("bo03_seller", "卖家BO03")
+        p1 = self._publish(seller["nickname"], "BO03 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO03 商品B", price=200,
+                           category="Skill")
+        p3 = self._publish(seller["nickname"], "BO03 商品C", price=300,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "price_update",
+                "product_ids": [p1["id"], p2["id"], p3["id"]],
+                "params": {"percentage": 10},
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["operation"], "price_update")
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 3)
+
+        # Verify new prices: 100*1.1=110, 200*1.1=220, 300*1.1=330
+        self.assertEqual(self._db_product(p1["id"])["price"], 110)
+        self.assertEqual(self._db_product(p2["id"])["price"], 220)
+        self.assertEqual(self._db_product(p3["id"])["price"], 330)
+
+    # ---- BO-04 ----
+    def test_bulk_price_update_amount(self):
+        """Updating prices by fixed amount adds/subtracts the amount
+        from each product's price."""
+        seller = self._register("bo04_seller", "卖家BO04")
+        p1 = self._publish(seller["nickname"], "BO04 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO04 商品B", price=200,
+                           category="Skill")
+        p3 = self._publish(seller["nickname"], "BO04 商品C", price=50,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "price_update",
+                "product_ids": [p1["id"], p2["id"], p3["id"]],
+                "params": {"amount": -5},
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 3)
+
+        # Verify new prices: 100-5=95, 200-5=195, 50-5=45
+        self.assertEqual(self._db_product(p1["id"])["price"], 95)
+        self.assertEqual(self._db_product(p2["id"])["price"], 195)
+        self.assertEqual(self._db_product(p3["id"])["price"], 45)
+
+    # ---- BO-05 ----
+    def test_bulk_price_minimum_respected(self):
+        """Price updates that would result in a price below ¥1 are clamped
+        to the minimum of ¥1."""
+        seller = self._register("bo05_seller", "卖家BO05")
+        p1 = self._publish(seller["nickname"], "BO05 低价商品", price=10,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO05 正常商品", price=100,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "price_update",
+                "product_ids": [p1["id"], p2["id"]],
+                "params": {"amount": -20},
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["succeeded"], 2)
+
+        # p1: 10 - 20 = -10, clamped to 1
+        # p2: 100 - 20 = 80
+        self.assertEqual(self._db_product(p1["id"])["price"], 1)
+        self.assertEqual(self._db_product(p2["id"])["price"], 80)
+
+        # Verify result messages mention the clamp for p1
+        results_by_pid = {res["product_id"]: res for res in body["results"]}
+        self.assertIn("最低价", results_by_pid[p1["id"]]["message"])
+
+    # ---- BO-06 ----
+    def test_bulk_delete_soft_delete(self):
+        """Bulk delete performs a soft delete (sets status='inactive')
+        without actually removing the product records."""
+        seller = self._register("bo06_seller", "卖家BO06")
+        p1 = self._publish(seller["nickname"], "BO06 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO06 商品B", price=200,
+                           category="Skill")
+        p3 = self._publish(seller["nickname"], "BO06 商品C", price=300,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "delete",
+                "product_ids": [p1["id"], p2["id"], p3["id"]],
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["operation"], "delete")
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 3)
+
+        # Verify soft delete: status='inactive', but records still exist
+        for pid in (p1["id"], p2["id"], p3["id"]):
+            row = self._db_product(pid)
+            self.assertIsNotNone(row,
+                                 f"Product {pid} should still exist (soft delete)")
+            self.assertEqual(row["status"], "inactive")
+
+    # ---- BO-07 ----
+    def test_bulk_rejects_other_sellers_products(self):
+        """A seller cannot perform bulk operations on products owned by
+        another seller — those products are reported as failed in the
+        results while the request itself returns 200."""
+        seller_a = self._register("bo07_seller_a", "卖家BO07-A")
+        seller_b = self._register("bo07_seller_b", "卖家BO07-B")
+
+        p1 = self._publish(seller_a["nickname"], "BO07 A的商品",
+                           price=100, category="Skill")
+        p2 = self._publish(seller_a["nickname"], "BO07 A的另一商品",
+                           price=200, category="Skill")
+
+        # Seller B tries to operate on Seller A's products
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "publish",
+                "product_ids": [p1["id"], p2["id"]],
+            },
+            headers=_x_user_id(seller_b["id"]),
+        )
+        # Returns 200 but all products fail due to ownership check
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["succeeded"], 0)
+        self.assertEqual(body["failed"], 2)
+
+        results_by_pid = {res["product_id"]: res for res in body["results"]}
+        for pid in (p1["id"], p2["id"]):
+            self.assertEqual(results_by_pid[pid]["status"], "failed")
+            self.assertIn("非本人发布", results_by_pid[pid]["message"])
+
+    # ---- BO-08 ----
+    def test_bulk_more_than_fifty_rejected(self):
+        """Bulk operations with more than 50 product IDs are rejected
+        with a 400 error."""
+        seller = self._register("bo08_seller", "卖家BO08")
+
+        # Create 51 products directly in DB for speed
+        product_ids = []
+
+        async def _seed():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            try:
+                for i in range(51):
+                    cursor = await conn.execute(
+                        "INSERT INTO products "
+                        "(name, description, category, price, seller_name, "
+                        "status, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (f"BO08 商品{i}", f"商品{i}描述", "Skill", 50,
+                         seller["nickname"], "active",
+                         datetime.datetime.now().isoformat()),
+                    )
+                    product_ids.append(cursor.lastrowid)
+                await conn.commit()
+            finally:
+                await conn.close()
+
+        asyncio.run(_seed())
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "publish",
+                "product_ids": product_ids,
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+        self.assertIn("50", body["error"])
+
+    # ---- BO-09 ----
+    def test_bulk_operation_history(self):
+        """GET /api/v4/products/bulk/history returns paginated operation
+        history for the current seller."""
+        seller = self._register("bo09_seller", "卖家BO09")
+        p1 = self._publish(seller["nickname"], "BO09 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["nickname"], "BO09 商品B", price=200,
+                           category="Skill")
+        p3 = self._publish(seller["nickname"], "BO09 商品C", price=300,
+                           category="Skill")
+
+        # Execute two bulk operations
+        r1 = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "publish",
+                "product_ids": [p1["id"], p2["id"]],
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+
+        r2 = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "price_update",
+                "product_ids": [p3["id"]],
+                "params": {"percentage": 5},
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+
+        # Get history page 1 with limit=1 to test pagination
+        r = self.client.get(
+            "/api/v4/products/bulk/history?page=1&limit=1",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("operations", body)
+        self.assertIn("total", body)
+        self.assertIn("page", body)
+        self.assertIn("limit", body)
+        self.assertEqual(body["page"], 1)
+        self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(len(body["operations"]), 1)
+
+        # Get page 2
+        r_page2 = self.client.get(
+            "/api/v4/products/bulk/history?page=2&limit=1",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r_page2.status_code, 200, r_page2.text)
+        body2 = r_page2.json()
+        self.assertEqual(body2["page"], 2)
+        self.assertEqual(body2["total"], 2)
+        self.assertEqual(len(body2["operations"]), 1)
+
+        # Collect operation types from both pages
+        op_types = {body["operations"][0]["operation"],
+                    body2["operations"][0]["operation"]}
+        self.assertIn("publish", op_types)
+        self.assertIn("price_update", op_types)
+
+    # ---- BO-10 ----
+    def test_bulk_invalid_operation_rejected(self):
+        """An unknown operation type returns a 400 error with a message
+        listing valid operations."""
+        seller = self._register("bo10_seller", "卖家BO10")
+        p1 = self._publish(seller["nickname"], "BO10 商品", price=100,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/products/bulk",
+            json={
+                "operation": "invalid_op",
+                "product_ids": [p1["id"]],
+            },
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+        self.assertIn("publish", body["error"])
+
+    # ---- Helpers ----
+
+    def _make_product_db(self, seller_name: str, name: str, price: int = 50,
+                         status: str = "inactive") -> dict:
+        """Insert a product directly into the DB with controlled status."""
+
+        async def _do():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            conn.row_factory = aiosqlite.Row
+            try:
+                now = datetime.datetime.now().isoformat()
+                cursor = await conn.execute(
+                    "INSERT INTO products "
+                    "(name, description, category, price, seller_name, "
+                    "status, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (name, f"{name} 的功能描述", "Skill", price, seller_name,
+                     status, now),
+                )
+                await conn.commit()
+                pid = cursor.lastrowid
+                cursor = await conn.execute(
+                    "SELECT * FROM products WHERE id = ?", (pid,),
+                )
+                row = await cursor.fetchone()
+                return dict(row) if row else {"id": pid}
+            finally:
+                await conn.close()
+
+        return asyncio.run(_do())
+
+    def _db_product(self, product_id: int) -> dict | None:
+        return asyncio.run(_fetchone(
+            "SELECT * FROM products WHERE id = ?", (product_id,),
+        ))

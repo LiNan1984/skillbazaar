@@ -627,6 +627,21 @@ async def _create_tables(db: aiosqlite.Connection):
 
         CREATE INDEX IF NOT EXISTS idx_trial_runs_user ON trial_runs(user_id);
         CREATE INDEX IF NOT EXISTS idx_trial_runs_product ON trial_runs(product_id);
+
+        CREATE TABLE IF NOT EXISTS bulk_operations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            product_ids TEXT NOT NULL,
+            params TEXT,
+            status TEXT DEFAULT 'pending',
+            succeeded_count INTEGER DEFAULT 0,
+            failed_count INTEGER DEFAULT 0,
+            error_details TEXT,
+            created_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_bulk_operations_user ON bulk_operations(user_id);
     """)
     await db.commit()
 
@@ -1916,6 +1931,19 @@ async def update_product_boost_score(product_id: int, boost_score: int) -> bool:
     try:
         cursor = await db.execute(
             "UPDATE products SET boost_score = ? WHERE id = ?", (boost_score, product_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def update_product_field(product_id: int, field: str, value) -> bool:
+    """Update a single field on a product by ID."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            f"UPDATE products SET {field} = ? WHERE id = ?", (value, product_id),
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -5195,5 +5223,110 @@ async def cleanup_old_trials(days: int = 30) -> int:
         )
         await db.commit()
         return cursor.rowcount
+    finally:
+        await db.close()
+
+
+# ---- Bulk Operations Helpers ----
+
+async def insert_bulk_operation(data: dict) -> int:
+    """Insert a new bulk_operations record. Returns the new ID."""
+    db = await get_db()
+    try:
+        now = datetime.now().isoformat()
+        cursor = await db.execute(
+            """INSERT INTO bulk_operations
+            (user_id, operation, product_ids, params, status,
+             succeeded_count, failed_count, error_details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                data["user_id"],
+                data["operation"],
+                json.dumps(data["product_ids"]),
+                json.dumps(data.get("params") or {}),
+                data.get("status", "pending"),
+                data.get("succeeded_count", 0),
+                data.get("failed_count", 0),
+                json.dumps(data.get("error_details") or []),
+                now,
+            ),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def update_bulk_operation(op_id: int, **fields) -> bool:
+    """Update fields of a bulk_operations record."""
+    db = await get_db()
+    try:
+        sets = []
+        values = []
+        for key, val in fields.items():
+            if isinstance(val, (list, dict)):
+                val = json.dumps(val)
+            sets.append(f"{key} = ?")
+            values.append(val)
+        if not sets:
+            return False
+        values.append(op_id)
+        cursor = await db.execute(
+            f"UPDATE bulk_operations SET {', '.join(sets)} WHERE id = ?",
+            values,
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def fetch_bulk_operation_by_id(op_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM bulk_operations WHERE id = ?", (op_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_user_bulk_operations(user_id: str, page: int = 1, limit: int = 20) -> tuple[list[dict], int]:
+    """Get paginated bulk operation history for a user."""
+    db = await get_db()
+    try:
+        count_cursor = await db.execute(
+            "SELECT COUNT(*) FROM bulk_operations WHERE user_id = ?",
+            (user_id,),
+        )
+        total = (await count_cursor.fetchone())[0]
+
+        offset = (page - 1) * limit
+        cursor = await db.execute(
+            "SELECT * FROM bulk_operations WHERE user_id = ? "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (user_id, limit, offset),
+        )
+        rows = await cursor.fetchall()
+        # Parse JSON fields before returning
+        operations = []
+        for row in rows:
+            op = dict(row)
+            try:
+                op["product_ids"] = json.loads(op.get("product_ids") or "[]")
+            except Exception:
+                op["product_ids"] = []
+            try:
+                op["params"] = json.loads(op.get("params") or "{}")
+            except Exception:
+                op["params"] = {}
+            try:
+                op["error_details"] = json.loads(op.get("error_details") or "[]")
+            except Exception:
+                op["error_details"] = []
+            operations.append(op)
+        return operations, total
     finally:
         await db.close()
