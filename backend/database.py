@@ -4614,3 +4614,375 @@ async def get_all_product_embeddings() -> list[dict]:
         ]
     finally:
         await db.close()
+
+
+# ===========================================================================
+# v4.7 – Subscription Helpers
+# ===========================================================================
+
+async def create_subscription_table():
+    """Create the subscriptions table if it does not exist."""
+    db = await get_db()
+    try:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                starts_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                auto_renew INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_product ON subscriptions(product_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)")
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def create_subscription_events_table():
+    """Create the subscription_events table if it does not exist."""
+    db = await get_db()
+    try:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subscription_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscription_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                amount INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+            )
+        """)
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def add_subscription_columns_to_products():
+    """Add subscription columns to products table if they don't exist."""
+    db = await get_db()
+    try:
+        try:
+            await db.execute("ALTER TABLE products ADD COLUMN subscription_plans TEXT DEFAULT '[]'")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE products ADD COLUMN is_subscription INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        await db.commit()
+    finally:
+        await db.close()
+
+
+# ---- Subscription CRUD ----
+
+async def create_subscription_db(user_id: str, product_id: int, plan: str, price: int, starts_at: str, expires_at: str) -> dict:
+    """Create a new subscription record. Returns the inserted row."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO subscriptions (user_id, product_id, plan, price, status, starts_at, expires_at, auto_renew)
+               VALUES (?, ?, ?, ?, 'active', ?, ?, 1)""",
+            (user_id, product_id, plan, price, starts_at, expires_at),
+        )
+        await db.commit()
+        sub_id = cursor.lastrowid
+        cursor = await db.execute("SELECT * FROM subscriptions WHERE id = ?", (sub_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_subscription_by_id(sub_id: int) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM subscriptions WHERE id = ?", (sub_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_active_subscription(user_id: str, product_id: int) -> dict | None:
+    """Fetch the active subscription for a user+product, or None."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM subscriptions
+               WHERE user_id = ? AND product_id = ? AND status = 'active'
+               ORDER BY created_at DESC LIMIT 1""",
+            (user_id, product_id),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_cancelled_subscription(user_id: str, product_id: int) -> dict | None:
+    """Fetch the cancelled subscription for a user+product, or None."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM subscriptions
+               WHERE user_id = ? AND product_id = ? AND status = 'cancelled'
+               ORDER BY created_at DESC LIMIT 1""",
+            (user_id, product_id),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_user_subscriptions(user_id: str) -> list[dict]:
+    """Fetch all active subscriptions for a user with product info."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT s.*, p.name as product_name, p.icon as product_icon, p.category as product_category
+               FROM subscriptions s
+               JOIN products p ON s.product_id = p.id
+               WHERE s.user_id = ? AND s.status = 'active'
+               ORDER BY s.created_at DESC""",
+            (user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def update_subscription_status(sub_id: int, status: str) -> bool:
+    """Update subscription status."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE subscriptions SET status = ?, updated_at = datetime('now') WHERE id = ?",
+            (status, sub_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def update_subscription_expiry(sub_id: int, expires_at: str) -> bool:
+    """Update subscription expiry and set status to active."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE subscriptions SET expires_at = ?, status = 'active', updated_at = datetime('now') WHERE id = ?",
+            (expires_at, sub_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def toggle_subscription_auto_renew_db(sub_id: int) -> dict | None:
+    """Toggle auto_renew flag. Returns updated row or None."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE subscriptions SET auto_renew = (auto_renew + 1) % 2, updated_at = datetime('now') WHERE id = ?",
+            (sub_id,),
+        )
+        await db.commit()
+        if cursor.rowcount > 0:
+            cursor = await db.execute("SELECT * FROM subscriptions WHERE id = ?", (sub_id,))
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+        return None
+    finally:
+        await db.close()
+
+
+async def find_expired_subscriptions() -> list[dict]:
+    """Find all active subscriptions where expires_at < now."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM subscriptions
+               WHERE status = 'active' AND expires_at < datetime('now')"""
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_product_subscription_plans(product_id: int) -> list[dict]:
+    """Get subscription plans configured for a product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT subscription_plans FROM products WHERE id = ?",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return []
+        plans_str = row[0] or "[]"
+        try:
+            import json as _json
+            return _json.loads(plans_str)
+        except Exception:
+            return []
+    finally:
+        await db.close()
+
+
+async def update_product_subscription_config(product_id: int, plans: list, is_subscription: bool) -> bool:
+    """Update subscription configuration for a product."""
+    db = await get_db()
+    try:
+        import json as _json
+        plans_json = _json.dumps(plans)
+        cursor = await db.execute(
+            "UPDATE products SET subscription_plans = ?, is_subscription = ? WHERE id = ?",
+            (plans_json, 1 if is_subscription else 0, product_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def insert_subscription_event(subscription_id: int, event_type: str, amount: int = None) -> int:
+    """Record a subscription lifecycle event."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO subscription_events (subscription_id, event_type, amount) VALUES (?, ?, ?)",
+            (subscription_id, event_type, amount),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def get_seller_subscription_stats_db(seller_id: str) -> dict:
+    """Get subscription analytics for a seller's products."""
+    db = await get_db()
+    try:
+        # Resolve seller name
+        user = await db.execute("SELECT username FROM users WHERE id = ?", (seller_id,))
+        user_row = await user.fetchone()
+        if not user_row:
+            return {"error": "user not found"}
+        seller_name = user_row[0]
+
+        # Get seller's product IDs
+        cursor = await db.execute(
+            "SELECT id FROM products WHERE seller_name = ?",
+            (seller_name,),
+        )
+        product_rows = await cursor.fetchall()
+        product_ids = [r[0] for r in product_rows]
+
+        if not product_ids:
+            return {
+                "total_subscribers": 0,
+                "active_subscriptions": 0,
+                "monthly_recurring_revenue": 0,
+                "churn_rate": 0.0,
+                "by_plan": {},
+                "top_products": [],
+            }
+
+        placeholders = ",".join("?" for _ in product_ids)
+        params = tuple(product_ids)
+
+        # Count all-time subscribers (distinct user_id)
+        cursor = await db.execute(
+            f"SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE product_id IN ({placeholders})",
+            params,
+        )
+        total_subscribers = (await cursor.fetchone())[0]
+
+        # Active subscriptions
+        cursor = await db.execute(
+            f"""SELECT COUNT(*) FROM subscriptions
+                WHERE product_id IN ({placeholders}) AND status = 'active' AND expires_at > datetime('now')""",
+            params,
+        )
+        active_subscriptions = (await cursor.fetchone())[0]
+
+        # Expired (for churn)
+        cursor = await db.execute(
+            f"""SELECT COUNT(*) FROM subscriptions
+                WHERE product_id IN ({placeholders}) AND status IN ('expired', 'cancelled')""",
+            params,
+        )
+        expired_count = (await cursor.fetchone())[0]
+
+        churn_rate = round(expired_count / total_subscribers, 4) if total_subscribers > 0 else 0.0
+
+        # Revenue by plan (all subscriptions regardless of status)
+        cursor = await db.execute(
+            f"""SELECT plan, COUNT(*) as cnt, SUM(price) as revenue
+                FROM subscriptions
+                WHERE product_id IN ({placeholders})
+                GROUP BY plan""",
+            params,
+        )
+        plan_rows = await cursor.fetchall()
+        by_plan = {}
+        mrr = 0
+        for row in plan_rows:
+            plan_name = row[0]
+            count = row[1]
+            revenue = row[2] or 0
+            by_plan[plan_name] = {"count": count, "revenue": revenue}
+            if plan_name == "monthly":
+                mrr += revenue
+            elif plan_name == "weekly":
+                mrr += int(revenue * 4.33)
+            elif plan_name == "yearly":
+                mrr += int(revenue / 12)
+
+        # Top products
+        cursor = await db.execute(
+            f"""SELECT s.product_id, p.name, COUNT(*) as sub_count, SUM(s.price) as mrr
+                FROM subscriptions s
+                JOIN products p ON s.product_id = p.id
+                WHERE s.product_id IN ({placeholders}) AND s.status = 'active' AND s.expires_at > datetime('now')
+                GROUP BY s.product_id
+                ORDER BY sub_count DESC
+                LIMIT 10""",
+            params,
+        )
+        top_rows = await cursor.fetchall()
+        top_products = []
+        for row in top_rows:
+            top_products.append({
+                "product_id": row[0],
+                "name": row[1],
+                "subscribers": row[2],
+                "mrr": row[3] or 0,
+            })
+
+        return {
+            "total_subscribers": total_subscribers,
+            "active_subscriptions": active_subscriptions,
+            "monthly_recurring_revenue": mrr,
+            "churn_rate": churn_rate,
+            "by_plan": by_plan,
+            "top_products": top_products,
+        }
+    finally:
+        await db.close()

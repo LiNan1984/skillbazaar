@@ -27,11 +27,16 @@ from routers.affiliate_v4 import router as affiliate_v4_router
 from routers.semantic_search_v4 import router as semantic_search_v4_router
 from routers.pricing_v4 import router as pricing_v4_router
 from routers.traffic_boost_v4 import router as traffic_boost_v4_router
+from routers.subscription_v4 import router as subscription_v4_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.init_db()
+    # Initialize subscription tables
+    await database.create_subscription_table()
+    await database.create_subscription_events_table()
+    await database.add_subscription_columns_to_products()
     yield
 
 
@@ -77,6 +82,7 @@ app.include_router(affiliate_v4_router)
 app.include_router(semantic_search_v4_router)
 app.include_router(pricing_v4_router)
 app.include_router(traffic_boost_v4_router)
+app.include_router(subscription_v4_router)
 
 
 @app.get("/")

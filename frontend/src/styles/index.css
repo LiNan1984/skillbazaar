@@ -831,6 +831,11 @@ img {
   padding: 16px 0;
   flex-wrap: wrap;
   gap: 12px;
+  pointer-events: none;
+}
+
+.sort-bar > * {
+  pointer-events: auto;
 }
 
 .result-count {
@@ -1264,7 +1269,7 @@ img {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 9999;
+  z-index: 100000;
   box-shadow: 0 4px 24px rgba(99, 102, 241, 0.4);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: assistantGlow 3s ease-in-out infinite;

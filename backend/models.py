@@ -1094,3 +1094,62 @@ class BoostDecayResponse(BaseModel):
 class BoostResetResponse(BaseModel):
     product_id: int
     boost_score: int
+
+
+# ===========================================================================
+# v4.7 – Skill Subscriptions
+# ===========================================================================
+
+class SubscriptionPlan(str, Enum):
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
+
+
+class SubscriptionPlanConfig(BaseModel):
+    plan: str
+    price: int
+
+
+class SubscriptionCreateRequest(BaseModel):
+    product_id: int
+    plan: str
+
+
+class SubscriptionResponse(BaseModel):
+    subscription_id: int
+    product_id: int
+    plan: str
+    price: int
+    status: str
+    starts_at: str
+    expires_at: str
+    auto_renew: bool = True
+
+
+class SubscriptionListResponse(BaseModel):
+    subscriptions: list[dict]
+
+
+class SubscriptionCheckResponse(BaseModel):
+    has_subscription: bool
+    subscription_id: int | None = None
+    plan: str | None = None
+    expires_at: str | None = None
+    days_remaining: int | None = None
+
+
+class SubscriptionProcessResponse(BaseModel):
+    renewed_count: int = 0
+    expired_count: int = 0
+    payment_failed_count: int = 0
+    message: str = ""
+
+
+class SellerSubscriptionStatsResponse(BaseModel):
+    total_subscribers: int
+    active_subscriptions: int
+    monthly_recurring_revenue: int
+    churn_rate: float
+    by_plan: dict[str, dict]
+    top_products: list[dict]

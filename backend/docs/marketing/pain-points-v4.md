@@ -2,7 +2,7 @@
 
 > **文档用途**: GTM 策略、产品定位、营销话术、功能路线图参考
 > **撰写日期**: 2026-09-19
-> **版本**: v4.4（v4.0 基线 + v4.1 + v4.2 + v4.3 + v4.4 实现进度）
+> **版本**: v4.7（v4.0 基线 + v4.1 + v4.2 + v4.3 + v4.4 + v4.5 + v4.6 + v4.7 实现进度）
 
 ---
 
@@ -79,7 +79,7 @@
 
 **改进建议**:
 - 推广「试用到满意再买」的 Trial-to-Purchase 转化漏斗
-- 增加分期/订阅模式（按月付费使用 Cron 订阅已验证）
+- ✅ **分期/订阅模式（v4.7 开发中）** — 按月付费降低决策门槛
 - 降低首次购买门槛（新手首单折扣）
 
 ### 痛点 7：安全顾虑 — 担心 Skill 包含恶意代码
@@ -175,7 +175,7 @@
 **SkillBazaar 对策**: Cron 订阅制已有模型，Bounty 系统提供定制收入。
 
 **改进建议**:
-- 推出 Skill 订阅模式（月费无限使用）
+- ✅ **Skill 订阅模式（v4.7 开发中）** — 月费无限使用
 - 收入分成透明化（平台费率公示）
 - 提现流程自动化
 
@@ -424,7 +424,7 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ### P2 — 中期做（构建壁垒）
 
-8. **Skill 订阅模式** — 从买断到订阅
+8. **Skill 订阅模式** — 从买断到订阅 (🔄 v4.7 开发中)
 9. **对比工具** — Side-by-side 功能对比
 10. **社区 Q&A + 评价增强** — 社会证明
 11. **Skill 录制演示视频** —  richer preview
@@ -534,23 +534,49 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - 向量相似度搜索 | | | | |
 | - Hash-based 128维嵌入 | | | | |
 | - 懒加载索引 | | | | |
+| **Smart Pricing Suggestions** | v4.5.1 | ✅ 完成 | 8/8 通过 | de91048 |
+| - 基于市场数据的定价建议 | | | | |
+| - 价格区间可视化 | | | | |
 
-### v4.6+ 计划中功能 📋
+### v4.6 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **New Product Traffic Boost** | v4.6.0 | ✅ 完成 | 8/8 通过 | f3a97d9 |
+| - 发布时 boost_score=100 | | | | |
+| - 每日 14% 衰减 | | | | |
+| - 7 天自动清零 | | | | |
+| - 卖家数据面板 | | | | |
+
+### v4.7 迭代进度追踪
+
+#### 进行中功能 🔄
+
+| 功能 | 版本 | 优先级 | 状态 |
+|------|------|--------|------|
+| **Skill Subscription** | v4.7.0 | P2 | 🔄 开发中 |
+| - 周/月/年订阅计划 | | | |
+| - 自动续费 | | | |
+| - 订阅生命周期管理 | | | |
+| - 卖家订阅数据分析 | | | |
+| - Cron 订阅处理 | | | |
+
+### v4.8+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
-| Semantic Search | v4.5.0 | P1 |
-| Smart Pricing Suggestions | v4.5.0 | P1 |
-| New Product Traffic Boost | v4.6.0 | P1 |
-| Skill Subscription | v4.6.0 | P2 |
-| Comparison Tool | v4.6.0 | P2 |
-| Mobile/PWA | v4.7.0 | P2 |
+| Comparison Tool | v4.8.0 | P2 |
+| Mobile/PWA | v4.9.0 | P2 |
+| Eval Score Badges in Search | v4.8.0 | P1 |
+| One-Click Trial Run | v4.8.0 | P1 |
 
 ### 迭代统计
 
-- **迭代次数**: 11+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search）
-- **测试覆盖率**: 155/155 (100%)
-- **代码提交**: 7 次
+- **迭代次数**: 12+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription）
+- **测试覆盖率**: 171/171 (100%)
+- **代码提交**: 9 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---

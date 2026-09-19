@@ -273,7 +273,7 @@ export default function ProductDetailPage({ userId, authToken }) {
             </div>
           )}
 
-          {(() => { const pt = typeof product.tags === 'string' ? JSON.parse(product.tags || '[]') : (product.tags || []); return pt.length > 0 && (
+          {(() => { let pt = []; try { pt = typeof product.tags === 'string' ? JSON.parse(product.tags || '[]') : (product.tags || []); } catch { pt = []; } return pt.length > 0 && (
             <div className="detail-tags">
               <Tag size={16} />
               {pt.map((tag) => (

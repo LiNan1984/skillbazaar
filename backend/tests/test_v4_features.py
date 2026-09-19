@@ -86,18 +86,17 @@ class _V4Base(unittest.TestCase):
         async def _clear():
             conn = await aiosqlite.connect(db_mod.DB_PATH)
             try:
-                await conn.execute("DELETE FROM bundle_items")
-                await conn.execute("DELETE FROM skill_bundles")
-                await conn.execute("DELETE FROM product_analytics")
-                await conn.execute("DELETE FROM saved_searches")
-                await conn.execute("DELETE FROM user_agents")
-                await conn.execute("DELETE FROM agent_skills")
-                await conn.execute("DELETE FROM wishlist_items")
-                await conn.execute("DELETE FROM affiliate_conversions")
-                await conn.execute("DELETE FROM affiliate_clicks")
-                await conn.execute("DELETE FROM affiliate_links")
-                await conn.execute("DELETE FROM products")
-                await conn.execute("DELETE FROM product_embeddings")
+                # v4.7 subscription tables may not exist yet — ignore if absent
+                for tbl in ("bundle_items", "skill_bundles", "product_analytics",
+                            "saved_searches", "user_agents", "agent_skills",
+                            "wishlist_items", "affiliate_conversions",
+                            "affiliate_clicks", "affiliate_links",
+                            "subscriptions", "subscription_events",
+                            "products", "product_embeddings"):
+                    try:
+                        await conn.execute(f"DELETE FROM {tbl}")
+                    except Exception:
+                        pass
                 await conn.commit()
             finally:
                 await conn.close()
@@ -192,6 +191,72 @@ class _V4Base(unittest.TestCase):
         return asyncio.run(_fetchall(
             "SELECT * FROM product_analytics WHERE product_id = ?", (product_id,),
         ))
+
+    # ---- subscription helpers ----
+
+    def _make_subscription_product(self, seller_name: str, name: str,
+                                   plans: list[dict] = None) -> dict:
+        """Publish a product and mark it as a subscription product.
+
+        Uses ALTER TABLE to add v4.7 columns if they don't exist yet,
+        mirroring the pattern in _seed_products.
+        """
+        prod = self._publish(seller_name, name, price=50, category="Skill")
+        plans = plans or [{"plan": "monthly", "price": 50}]
+
+        async def _configure():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            try:
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN is_subscription INTEGER DEFAULT 0"
+                    )
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN subscription_plans TEXT DEFAULT '[]'"
+                    )
+                except Exception:
+                    pass
+                await conn.commit()
+                await conn.close()
+            except Exception:
+                pass
+        asyncio.run(_configure())
+
+        asyncio.run(_fetchall(
+            "UPDATE products SET is_subscription = 1, subscription_plans = ? WHERE id = ?",
+            (json.dumps(plans), prod["id"]),
+        ))
+        return prod
+
+    def _db_subscriptions(self, user_id: str = None,
+                          product_id: int = None) -> list[dict]:
+        if user_id and product_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM subscriptions WHERE user_id = ? AND product_id = ?",
+                (user_id, product_id),
+            ))
+        if user_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM subscriptions WHERE user_id = ?", (user_id,),
+            ))
+        return asyncio.run(_fetchall("SELECT * FROM subscriptions"))
+
+    def _db_subscription_events(self, subscription_id: int = None,
+                                event_type: str = None) -> list[dict]:
+        if subscription_id and event_type:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM subscription_events WHERE subscription_id = ? AND event_type = ?",
+                (subscription_id, event_type),
+            ))
+        if subscription_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM subscription_events WHERE subscription_id = ?",
+                (subscription_id,),
+            ))
+        return asyncio.run(_fetchall("SELECT * FROM subscription_events"))
 
 
 # ===========================================================================
@@ -1781,6 +1846,485 @@ class TestTrafficBoost(_V4Base):
             "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
         ))
         self.assertEqual(row["boost_score"], 100)
+
+
+# ===========================================================================
+# v4.7 – Skill Subscription  (SB-01 … SB-10)
+# ===========================================================================
+
+class TestSkillSubscription(_V4Base):
+    """Recurring subscription model for Skills."""
+
+    # ---- SB-01 ----
+    def test_create_subscription(self):
+        """POST /api/v4/subscriptions/create deducts coins and returns the
+        subscription record with correct fields."""
+        seller = self._register("sb01_seller", "卖家SB01")
+        buyer = self._register("sb01_buyer", "买家SB01")
+        prod = self._make_subscription_product(
+            seller["username"], "SB01 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # Verify buyer starts with 10000 coins
+        buyer_row = asyncio.run(_fetchone(
+            "SELECT coins FROM users WHERE id = ?", (buyer["id"],)
+        ))
+        self.assertEqual(buyer_row["coins"], 10000)
+
+        r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        sub = r.json()
+        self.assertEqual(sub["product_id"], prod["id"])
+        self.assertEqual(sub["plan"], "monthly")
+        self.assertEqual(sub["price"], 50)
+        self.assertEqual(sub["status"], "active")
+        self.assertEqual(sub["auto_renew"], True)
+        self.assertIn("subscription_id", sub)
+        self.assertIn("starts_at", sub)
+        self.assertIn("expires_at", sub)
+
+        # Verify coins deducted
+        buyer_row = asyncio.run(_fetchone(
+            "SELECT coins FROM users WHERE id = ?", (buyer["id"],)
+        ))
+        self.assertEqual(buyer_row["coins"], 9950)
+
+        # Verify subscription record in DB
+        rows = self._db_subscriptions(buyer["id"], prod["id"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "active")
+        self.assertEqual(rows[0]["plan"], "monthly")
+        self.assertEqual(rows[0]["price"], 50)
+
+    # ---- SB-02 ----
+    def test_duplicate_subscription_returns_existing(self):
+        """Creating a second subscription for the same product returns the
+        existing active subscription without deducting coins again."""
+        seller = self._register("sb02_seller", "卖家SB02")
+        buyer = self._register("sb02_buyer", "买家SB02")
+        prod = self._make_subscription_product(
+            seller["username"], "SB02 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # First subscription
+        r1 = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r1.status_code, 201, r1.text)
+        sub1 = r1.json()
+
+        # Second attempt — should return existing, not create new
+        r2 = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        sub2 = r2.json()
+        self.assertEqual(sub1["subscription_id"], sub2["subscription_id"])
+
+        # Verify only one subscription row
+        rows = self._db_subscriptions(buyer["id"], prod["id"])
+        self.assertEqual(len(rows), 1)
+
+        # Verify coins only deducted once
+        buyer_row = asyncio.run(_fetchone(
+            "SELECT coins FROM users WHERE id = ?", (buyer["id"],)
+        ))
+        self.assertEqual(buyer_row["coins"], 9950)
+
+    # ---- SB-03 ----
+    def test_cancel_subscription(self):
+        """Cancelling sets status to 'cancelled' but access continues
+        until the original expires_at."""
+        seller = self._register("sb03_seller", "卖家SB03")
+        buyer = self._register("sb03_buyer", "买家SB03")
+        prod = self._make_subscription_product(
+            seller["username"], "SB03 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # Create subscription
+        create_r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201)
+        sub_id = create_r.json()["subscription_id"]
+        original_expires = create_r.json()["expires_at"]
+
+        # Cancel
+        r = self.client.post(
+            f"/api/v4/subscriptions/{sub_id}/cancel",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["status"], "cancelled")
+        self.assertEqual(body["expires_at"], original_expires)
+
+        # Verify DB status
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM subscriptions WHERE id = ?", (sub_id,),
+        ))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "cancelled")
+
+        # Subscription still exists (not deleted) — access valid until expires_at
+        check_r = self.client.get(
+            f"/api/v4/subscriptions/check?product_id={prod['id']}",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(check_r.status_code, 200, check_r.text)
+        self.assertTrue(check_r.json()["has_subscription"])
+
+    # ---- SB-04 ----
+    def test_toggle_auto_renew(self):
+        """POST /api/v4/subscriptions/{id}/toggle-renew flips auto_renew."""
+        seller = self._register("sb04_seller", "卖家SB04")
+        buyer = self._register("sb04_buyer", "买家SB04")
+        prod = self._make_subscription_product(
+            seller["username"], "SB04 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        create_r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201)
+        sub_id = create_r.json()["subscription_id"]
+        self.assertTrue(create_r.json()["auto_renew"])
+
+        # Toggle off
+        r = self.client.post(
+            f"/api/v4/subscriptions/{sub_id}/toggle-renew",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["auto_renew"], False)
+
+        # Verify DB
+        rows = asyncio.run(_fetchall(
+            "SELECT auto_renew FROM subscriptions WHERE id = ?", (sub_id,),
+        ))
+        self.assertEqual(rows[0]["auto_renew"], 0)
+
+        # Toggle back on
+        r2 = self.client.post(
+            f"/api/v4/subscriptions/{sub_id}/toggle-renew",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertEqual(r2.json()["auto_renew"], True)
+
+    # ---- SB-05 ----
+    def test_list_my_subscriptions(self):
+        """GET /api/v4/subscriptions/my returns active subscriptions
+        with product_name included."""
+        seller = self._register("sb05_seller", "卖家SB05")
+        buyer = self._register("sb05_buyer", "买家SB05")
+        prod1 = self._make_subscription_product(
+            seller["username"], "SB05 技能A",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+        prod2 = self._make_subscription_product(
+            seller["username"], "SB05 技能B",
+            plans=[{"plan": "weekly", "price": 15}],
+        )
+
+        self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod1["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod2["id"], "plan": "weekly"},
+            headers=_auth(buyer["token"]),
+        )
+
+        r = self.client.get(
+            "/api/v4/subscriptions/my",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        subs = r.json()["subscriptions"]
+        self.assertEqual(len(subs), 2)
+        names = {s["product_name"] for s in subs}
+        self.assertIn("SB05 技能A", names)
+        self.assertIn("SB05 技能B", names)
+        # Verify each entry has required fields
+        for s in subs:
+            self.assertIn("subscription_id", s)
+            self.assertIn("plan", s)
+            self.assertIn("price", s)
+            self.assertIn("status", s)
+            self.assertIn("expires_at", s)
+            self.assertIn("auto_renew", s)
+
+    # ---- SB-06 ----
+    def test_cron_renews_expired_active_subs(self):
+        """Cron extends expires_at for auto-renew subscriptions past expiry,
+        deducts coins, and records a 'renewed' event."""
+        seller = self._register("sb06_seller", "卖家SB06")
+        buyer = self._register("sb06_buyer", "买家SB06")
+        prod = self._make_subscription_product(
+            seller["username"], "SB06 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # Create subscription
+        create_r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201)
+        sub_id = create_r.json()["subscription_id"]
+
+        # Simulate expiry: push expires_at to the past
+        past_date = (
+            datetime.datetime.now() - datetime.timedelta(days=1)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE subscriptions SET expires_at = ? WHERE id = ?",
+            (past_date, sub_id),
+        ))
+
+        # Run cron
+        r = self.client.post("/api/v4/cron/process-subscriptions")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("renewed_count", body)
+        self.assertGreaterEqual(body["renewed_count"], 1)
+
+        # Verify subscription extended
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM subscriptions WHERE id = ?", (sub_id,),
+        ))
+        self.assertEqual(rows[0]["status"], "active")
+        new_expires = rows[0]["expires_at"]
+        self.assertGreater(new_expires, past_date)
+
+        # Verify coins deducted for renewal
+        buyer_row = asyncio.run(_fetchone(
+            "SELECT coins FROM users WHERE id = ?", (buyer["id"],)
+        ))
+        # 10000 - 50 (initial) - 50 (renewal) = 9900
+        self.assertEqual(buyer_row["coins"], 9900)
+
+        # Verify renewal event recorded
+        events = self._db_subscription_events(sub_id, "renewed")
+        self.assertGreaterEqual(len(events), 1)
+
+    # ---- SB-07 ----
+    def test_cron_expires_non_renew_subs(self):
+        """Cron marks manual (auto_renew=0) subscriptions as expired
+        when expires_at has passed."""
+        seller = self._register("sb07_seller", "卖家SB07")
+        buyer = self._register("sb07_buyer", "买家SB07")
+        prod = self._make_subscription_product(
+            seller["username"], "SB07 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # Create subscription with auto_renew=0
+        create_r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201)
+        sub_id = create_r.json()["subscription_id"]
+
+        # Disable auto_renew
+        self.client.post(
+            f"/api/v4/subscriptions/{sub_id}/toggle-renew",
+            headers=_auth(buyer["token"]),
+        )
+
+        # Simulate expiry
+        past_date = (
+            datetime.datetime.now() - datetime.timedelta(days=1)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE subscriptions SET expires_at = ? WHERE id = ?",
+            (past_date, sub_id),
+        ))
+
+        # Run cron
+        r = self.client.post("/api/v4/cron/process-subscriptions")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("expired_count", body)
+        self.assertGreaterEqual(body["expired_count"], 1)
+
+        # Verify status changed to expired
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM subscriptions WHERE id = ?", (sub_id,),
+        ))
+        self.assertEqual(rows[0]["status"], "expired")
+
+        # Verify expired event recorded
+        events = self._db_subscription_events(sub_id, "expired")
+        self.assertGreaterEqual(len(events), 1)
+
+    # ---- SB-08 ----
+    def test_seller_subscription_stats(self):
+        """GET /api/v4/seller/subscription-stats returns MRR, subscriber
+        counts, churn_rate, by_plan breakdown, and top_products."""
+        seller = self._register("sb08_seller", "卖家SB08")
+        buyer1 = self._register("sb08_buyer1", "买家SB08-1")
+        buyer2 = self._register("sb08_buyer2", "买家SB08-2")
+
+        prod_monthly = self._make_subscription_product(
+            seller["username"], "SB08 月付技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+        prod_yearly = self._make_subscription_product(
+            seller["username"], "SB08 年付技能",
+            plans=[{"plan": "yearly", "price": 500}],
+        )
+
+        # buyer1: monthly subscription
+        self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod_monthly["id"], "plan": "monthly"},
+            headers=_auth(buyer1["token"]),
+        )
+        # buyer2: yearly subscription
+        self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod_yearly["id"], "plan": "yearly"},
+            headers=_auth(buyer2["token"]),
+        )
+
+        # Mark buyer1's subscription as expired to simulate churn
+        subs = self._db_subscriptions(user_id=buyer1["id"])
+        expired_sub_id = subs[0]["id"]
+        past_date = (
+            datetime.datetime.now() - datetime.timedelta(days=1)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE subscriptions SET status = 'expired', expires_at = ? WHERE id = ?",
+            (past_date, expired_sub_id),
+        ))
+
+        r = self.client.get(
+            "/api/v4/seller/subscription-stats",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("total_subscribers", body)
+        self.assertIn("active_subscriptions", body)
+        self.assertIn("monthly_recurring_revenue", body)
+        self.assertIn("churn_rate", body)
+        self.assertIn("by_plan", body)
+        self.assertIn("top_products", body)
+
+        # 2 total subscribers, 1 active (buyer2 yearly)
+        self.assertEqual(body["total_subscribers"], 2)
+        self.assertEqual(body["active_subscriptions"], 1)
+
+        # MRR: yearly contributes 500/12 ≈ 42 (or similar calculation)
+        self.assertGreater(body["monthly_recurring_revenue"], 0)
+
+        # Churn: 1 expired out of 2 = 0.5
+        self.assertEqual(body["churn_rate"], 0.5)
+
+        # by_plan breakdown
+        self.assertIn("yearly", body["by_plan"])
+        self.assertIn("monthly", body["by_plan"])
+
+        # top_products list
+        self.assertIsInstance(body["top_products"], list)
+        self.assertGreaterEqual(len(body["top_products"]), 1)
+
+    # ---- SB-09 ----
+    def test_check_subscription_access(self):
+        """GET /api/v4/subscriptions/check confirms active subscription
+        grants access with days_remaining."""
+        seller = self._register("sb09_seller", "卖家SB09")
+        buyer = self._register("sb09_buyer", "买家SB09")
+        prod = self._make_subscription_product(
+            seller["username"], "SB09 订阅技能",
+            plans=[{"plan": "monthly", "price": 50}],
+        )
+
+        # No subscription yet
+        r = self.client.get(
+            f"/api/v4/subscriptions/check?product_id={prod['id']}",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertFalse(r.json()["has_subscription"])
+
+        # Create subscription
+        create_r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201)
+
+        # Now has subscription
+        r2 = self.client.get(
+            f"/api/v4/subscriptions/check?product_id={prod['id']}",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        body = r2.json()
+        self.assertTrue(body["has_subscription"])
+        self.assertIn("subscription_id", body)
+        self.assertEqual(body["plan"], "monthly")
+        self.assertIn("expires_at", body)
+        self.assertIn("days_remaining", body)
+        self.assertGreaterEqual(body["days_remaining"], 25)
+
+    # ---- SB-10 ----
+    def test_insufficient_balance_rejected(self):
+        """Subscription creation is rejected when the buyer's coin balance
+        is below the subscription price."""
+        seller = self._register("sb10_seller", "卖家SB10")
+        buyer = self._register("sb10_buyer", "买家SB10")
+        prod = self._make_subscription_product(
+            seller["username"], "SB10 高价订阅技能",
+            plans=[{"plan": "monthly", "price": 50000}],
+        )
+
+        # Reduce buyer's balance below subscription price
+        asyncio.run(_fetchall(
+            "UPDATE users SET coins = ? WHERE id = ?",
+            (100, buyer["id"]),
+        ))
+
+        r = self.client.post(
+            "/api/v4/subscriptions/create",
+            json={"product_id": prod["id"], "plan": "monthly"},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 402, r.text)
+
+        # Verify no subscription created and balance unchanged
+        rows = self._db_subscriptions(buyer["id"], prod["id"])
+        self.assertEqual(len(rows), 0)
+
+        buyer_row = asyncio.run(_fetchone(
+            "SELECT coins FROM users WHERE id = ?", (buyer["id"],)
+        ))
+        self.assertEqual(buyer_row["coins"], 100)
 
 
 if __name__ == "__main__":
