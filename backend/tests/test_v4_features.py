@@ -2327,5 +2327,246 @@ class TestSkillSubscription(_V4Base):
         self.assertEqual(buyer_row["coins"], 100)
 
 
+# ===========================================================================
+# v4.8 – Eval Score Badge  (EB-01 … EB-08)
+# ===========================================================================
+
+class TestEvalBadge(_V4Base):
+    """Eval score badges in search results: tier mapping, filtering, sorting."""
+
+    def _make_eval_product(self, seller_name: str, name: str,
+                           eval_score: float, eval_status: str = "passed",
+                           price: int = 50, category: str = "Skill") -> dict:
+        """Publish a product and set eval_score + eval_status on it.
+
+        Uses ALTER TABLE to add v4.8 columns if they don't exist yet,
+        mirroring the pattern used by _make_subscription_product.
+        """
+        prod = self._publish(seller_name, name, price=price,
+                             category=category)
+
+        async def _configure():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            try:
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN eval_score REAL"
+                    )
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN eval_status TEXT DEFAULT 'pending'"
+                    )
+                except Exception:
+                    pass
+                await conn.commit()
+            finally:
+                await conn.close()
+        asyncio.run(_configure())
+
+        asyncio.run(_fetchall(
+            "UPDATE products SET eval_score = ?, eval_status = ? WHERE id = ?",
+            (eval_score, eval_status, prod["id"]),
+        ))
+        return prod
+
+    # ---- EB-01 ----
+    def test_eval_badge_excellent(self):
+        """Score >= 0.9 with status 'passed' returns an excellent A+ badge."""
+        seller = self._register("eb01_seller", "卖家EB01")
+        self._make_eval_product(seller["username"], "EB01 优秀技能",
+                                eval_score=0.95, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB01", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        item = next(p for p in results if p["name"] == "EB01 优秀技能")
+        badge = item["eval_badge"]
+        self.assertIsNotNone(badge)
+        self.assertEqual(badge["tier"], "excellent")
+        self.assertEqual(badge["color"], "#22c55e")
+        self.assertEqual(badge["label"], "A+")
+        self.assertEqual(badge["score_display"], "95/100")
+
+    # ---- EB-02 ----
+    def test_eval_badge_good(self):
+        """Score 0.7-0.89 with status 'passed' returns a good B+ badge."""
+        seller = self._register("eb02_seller", "卖家EB02")
+        self._make_eval_product(seller["username"], "EB02 良好技能",
+                                eval_score=0.75, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB02", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        item = next(p for p in results if p["name"] == "EB02 良好技能")
+        badge = item["eval_badge"]
+        self.assertIsNotNone(badge)
+        self.assertEqual(badge["tier"], "good")
+        self.assertEqual(badge["color"], "#3b82f6")
+        self.assertEqual(badge["label"], "B+")
+        self.assertEqual(badge["score_display"], "75/100")
+
+    # ---- EB-03 ----
+    def test_eval_badge_average(self):
+        """Score 0.5-0.69 with status 'passed' returns an average C+ badge."""
+        seller = self._register("eb03_seller", "卖家EB03")
+        self._make_eval_product(seller["username"], "EB03 一般技能",
+                                eval_score=0.60, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB03", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        item = next(p for p in results if p["name"] == "EB03 一般技能")
+        badge = item["eval_badge"]
+        self.assertIsNotNone(badge)
+        self.assertEqual(badge["tier"], "average")
+        self.assertEqual(badge["color"], "#eab308")
+        self.assertEqual(badge["label"], "C+")
+        self.assertEqual(badge["score_display"], "60/100")
+
+    # ---- EB-04 ----
+    def test_eval_badge_poor(self):
+        """Score 0.0-0.49 with status 'passed' returns a poor D badge."""
+        seller = self._register("eb04_seller", "卖家EB04")
+        self._make_eval_product(seller["username"], "EB04 差技能",
+                                eval_score=0.30, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB04", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        item = next(p for p in results if p["name"] == "EB04 差技能")
+        badge = item["eval_badge"]
+        self.assertIsNotNone(badge)
+        self.assertEqual(badge["tier"], "poor")
+        self.assertEqual(badge["color"], "#ef4444")
+        self.assertEqual(badge["label"], "D")
+        self.assertEqual(badge["score_display"], "30/100")
+
+    # ---- EB-05 ----
+    def test_eval_badge_pending_no_badge(self):
+        """Products with 'pending' or 'failed' eval_status return no badge."""
+        seller = self._register("eb05_seller", "卖家EB05")
+        self._make_eval_product(seller["username"], "EB05 待评估",
+                                eval_score=0.95, eval_status="pending")
+        self._make_eval_product(seller["username"], "EB05 未通过",
+                                eval_score=0.40, eval_status="failed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB05", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 2)
+        for item in results:
+            if item["name"] in ("EB05 待评估", "EB05 未通过"):
+                self.assertIsNone(item["eval_badge"],
+                                  f"{item['name']} should have no badge")
+
+    # ---- EB-06 ----
+    def test_search_with_eval_filter(self):
+        """min_eval_score filter excludes products below the threshold."""
+        seller = self._register("eb06_seller", "卖家EB06")
+        self._make_eval_product(seller["username"], "EB06 优秀",
+                                eval_score=0.95, eval_status="passed")
+        self._make_eval_product(seller["username"], "EB06 中等",
+                                eval_score=0.60, eval_status="passed")
+        self._make_eval_product(seller["username"], "EB06 未通过",
+                                eval_score=0.40, eval_status="failed")
+
+        # Filter for min_eval_score=0.9 — only the excellent product should pass
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB06", "filters": {"min_eval_score": 0.9}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        for item in results:
+            if item["eval_status"] == "passed":
+                self.assertGreaterEqual(
+                    item["eval_score"], 0.9,
+                    "All passed products should meet min_eval_score threshold",
+                )
+
+    # ---- EB-07 ----
+    def test_search_results_include_badge(self):
+        """Search results include eval_badge for products with passed status."""
+        seller = self._register("eb07_seller", "卖家EB07")
+        self._make_eval_product(seller["username"], "EB07 技能",
+                                eval_score=0.85, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "EB07", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        item = next(p for p in results if p["name"] == "EB07 技能")
+
+        # eval_badge must be present with all required fields
+        self.assertIn("eval_badge", item)
+        badge = item["eval_badge"]
+        self.assertIsNotNone(badge)
+        self.assertIn("tier", badge)
+        self.assertIn("color", badge)
+        self.assertIn("label", badge)
+        self.assertIn("score_display", badge)
+
+        # Raw eval fields should also be present
+        self.assertIn("eval_score", item)
+        self.assertIn("eval_status", item)
+
+    # ---- EB-08 ----
+    def test_sort_by_eval_score(self):
+        """Sorting by eval_score orders results by score descending."""
+        seller = self._register("eb08_seller", "卖家EB08")
+        self._make_eval_product(seller["username"], "EB08 高分",
+                                eval_score=0.92, eval_status="passed")
+        self._make_eval_product(seller["username"], "EB08 低分",
+                                eval_score=0.45, eval_status="passed")
+        self._make_eval_product(seller["username"], "EB08 中分",
+                                eval_score=0.70, eval_status="passed")
+
+        r = self.client.post(
+            "/api/v4/search",
+            json={
+                "query": "EB08",
+                "filters": {},
+                "sort": "eval_score",
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+
+        # Extract eval_scores for our products in result order
+        scores = [
+            p["eval_score"] for p in results
+            if p["name"].startswith("EB08 ")
+        ]
+        # Verify descending order
+        self.assertEqual(len(scores), 3)
+        self.assertGreaterEqual(scores[0], scores[1])
+        self.assertGreaterEqual(scores[1], scores[2])
+
+
 if __name__ == "__main__":
     unittest.main()

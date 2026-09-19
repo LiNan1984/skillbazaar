@@ -71,6 +71,29 @@ class ProductCreate(BaseModel):
     compat: Optional[str] = None  # JSON array of runtime strings
 
 
+def compute_eval_badge(eval_score: float | None, eval_status: str | None) -> dict | None:
+    """Compute badge info for a product's eval score.
+
+    eval_score is expected as 0.0-1.0 float.
+    """
+    if eval_status != "passed" or eval_score is None:
+        return None
+    if eval_score >= 0.9:
+        tier, color, label = "excellent", "#22c55e", "A+"
+    elif eval_score >= 0.7:
+        tier, color, label = "good", "#3b82f6", "B+"
+    elif eval_score >= 0.5:
+        tier, color, label = "average", "#eab308", "C+"
+    else:
+        tier, color, label = "poor", "#ef4444", "D"
+    return {
+        "tier": tier,
+        "color": color,
+        "label": label,
+        "score_display": f"{int(eval_score * 100)}/100",
+    }
+
+
 class ProductResponse(BaseModel):
     id: int
     name: str
@@ -812,6 +835,7 @@ class PaymentMethodResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str = ""
     filters: dict = {}
+    sort: str = ""
 
 
 class SearchResponse(BaseModel):
@@ -928,6 +952,7 @@ class SearchFilters(BaseModel):
     min_price: Optional[int] = None
     max_price: Optional[int] = None
     min_rating: Optional[float] = None
+    min_eval_score: Optional[int] = None
     sort_by: str = "relevance"
     page: int = 1
     page_size: int = 20

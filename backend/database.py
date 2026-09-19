@@ -1084,6 +1084,15 @@ async def _seed_products(db: aiosqlite.Connection):
         await db.execute("ALTER TABLE products ADD COLUMN boost_score INTEGER DEFAULT 0")
     except Exception:
         pass
+    # v4.8 – Eval score badge columns
+    try:
+        await db.execute("ALTER TABLE products ADD COLUMN eval_score REAL")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE products ADD COLUMN eval_status TEXT DEFAULT 'pending'")
+    except Exception:
+        pass
     await db.commit()
 
 
@@ -3875,12 +3884,14 @@ async def delete_payment_method(method_id: int, user_id: str) -> bool:
 
 async def search_products(query: str = "", category: str = None,
                           min_price: int = None, max_price: int = None,
+                          min_eval_score: float = None,
+                          sort_by: str = "relevance",
                           page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
     """Full-text search across products with optional filters."""
     db = await get_db()
     try:
         offset = (page - 1) * page_size
-        where = ["1=1"]
+        where = ["p.status = 'active'"]
         params = []
         if query:
             where.append("(p.name LIKE ? OR p.description LIKE ? OR p.content_preview LIKE ?)")
@@ -3895,8 +3906,26 @@ async def search_products(query: str = "", category: str = None,
         if max_price is not None:
             where.append("p.price <= ?")
             params.append(max_price)
+        if min_eval_score is not None:
+            where.append("p.eval_score >= ?")
+            params.append(min_eval_score)
 
-        sql = f"SELECT * FROM products p WHERE {' AND '.join(where)} ORDER BY p.boost_score DESC, p.created_at DESC LIMIT ? OFFSET ?"
+        allowed_sorts = {
+            "downloads": "p.downloads DESC",
+            "rating": "p.rating DESC",
+            "price_asc": "p.price ASC",
+            "price_desc": "p.price DESC",
+            "sales": "p.sales DESC",
+            "newest": "p.created_at DESC",
+            "eval_score": "p.eval_score DESC",
+            "relevance": "p.boost_score DESC, p.created_at DESC",
+        }
+        order = allowed_sorts.get(sort_by, "p.boost_score DESC, p.created_at DESC")
+        # Boost-aware tiebreaker for non-eval sorts
+        if "boost_score" not in order:
+            order = f"{order}, COALESCE(p.boost_score, 0) DESC"
+
+        sql = f"SELECT p.* FROM products p WHERE {' AND '.join(where)} ORDER BY {order} LIMIT ? OFFSET ?"
         cursor = await db.execute(sql, params + [page_size, offset])
         rows = await cursor.fetchall()
         results = [dict(r) for r in rows]
