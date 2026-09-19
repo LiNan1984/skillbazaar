@@ -21,6 +21,8 @@ from routers.analytics_v4 import router as analytics_v4_router
 from routers.payments import router as payments_router
 from routers.search_v4 import router as search_v4_router
 from routers.bundles_v4 import router as bundles_v4_router
+from routers.wishlist_v4 import router as wishlist_v4_router
+from routers.recommendations_v4 import router as recommendations_v4_router
 
 
 @asynccontextmanager
@@ -65,6 +67,8 @@ app.include_router(analytics_v4_router)
 app.include_router(payments_router)
 app.include_router(search_v4_router)
 app.include_router(bundles_v4_router)
+app.include_router(wishlist_v4_router)
+app.include_router(recommendations_v4_router)
 
 
 @app.get("/")

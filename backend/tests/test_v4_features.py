@@ -981,5 +981,127 @@ class TestSkillBundles(_V4Base):
         self.assertEqual(r2.status_code, 403, r2.text)
 
 
+# ---------------------------------------------------------------------------
+# v4.3 – Wishlist + Recommendations
+# ---------------------------------------------------------------------------
+
+class TestWishlist(_V4Base):
+    """Wishlist (愿望单) endpoints."""
+
+    # ---- WL-01 ----
+    def test_add_product_to_wishlist(self):
+        """User can add a product to their wishlist."""
+        user = self._register("wl01_user")
+        product = self._publish("wl01_seller", "WL01 商品")
+
+        r = self.client.post(
+            f"/api/v4/wishlist/{product['id']}",
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        body = r.json()
+        self.assertEqual(body["product_id"], product["id"])
+        self.assertEqual(body["product_name"], "WL01 商品")
+
+    # ---- WL-02 ----
+    def test_list_wishlist(self):
+        """User can list all items in their wishlist."""
+        user = self._register("wl02_user")
+        p1 = self._publish("wl02_seller", "WL02 A")
+        p2 = self._publish("wl02_seller", "WL02 B")
+
+        self.client.post(f"/api/v4/wishlist/{p1['id']}", headers=_auth(user["token"]))
+        self.client.post(f"/api/v4/wishlist/{p2['id']}", headers=_auth(user["token"]))
+
+        r = self.client.get("/api/v4/wishlist", headers=_auth(user["token"]))
+        self.assertEqual(r.status_code, 200, r.text)
+        items = r.json()["items"]
+        self.assertEqual(len(items), 2)
+        names = {i["product_name"] for i in items}
+        self.assertIn("WL02 A", names)
+        self.assertIn("WL02 B", names)
+
+    # ---- WL-03 ----
+    def test_remove_from_wishlist(self):
+        """User can remove a product from their wishlist."""
+        user = self._register("wl03_user")
+        product = self._publish("wl03_seller", "WL03 商品")
+
+        self.client.post(f"/api/v4/wishlist/{product['id']}", headers=_auth(user["token"]))
+        r = self.client.delete(
+            f"/api/v4/wishlist/{product['id']}",
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+
+        # Verify removed
+        r2 = self.client.get("/api/v4/wishlist", headers=_auth(user["token"]))
+        self.assertEqual(len(r2.json()["items"]), 0)
+
+    # ---- WL-04 ----
+    def test_wishlist_requires_auth(self):
+        """Wishlist endpoints require authentication."""
+        product = self._publish("wl04_seller", "WL04 商品")
+
+        r = self.client.post(f"/api/v4/wishlist/{product['id']}")
+        self.assertEqual(r.status_code, 401)
+
+        r = self.client.get("/api/v4/wishlist")
+        self.assertEqual(r.status_code, 401)
+
+
+class TestRecommendations(_V4Base):
+    """Product recommendation endpoints."""
+
+    # ---- RC-01 ----
+    def test_similar_products_by_category(self):
+        """Products in the same category are returned as similar."""
+        seller = self._register("rc01_seller")
+        p1 = self._publish(seller["username"], "RC01 A", category="数据分析")
+        p2 = self._publish(seller["username"], "RC01 B", category="数据分析")
+        p3 = self._publish(seller["username"], "RC01 C", category="图像生成")
+
+        r = self.client.get(f"/api/v4/recommendations/similar/{p1['id']}")
+        self.assertEqual(r.status_code, 200, r.text)
+        recs = r.json()["recommendations"]
+        ids = {item["product_id"] for item in recs}
+        # Should include p2 (same category) but not p3
+        self.assertIn(p2["id"], ids)
+        self.assertNotIn(p3["id"], ids)
+        # Should not include itself
+        self.assertNotIn(p1["id"], ids)
+
+    # ---- RC-02 ----
+    def test_frequently_bought_together(self):
+        """Products frequently bought together are recommended."""
+        seller = self._register("rc02_seller")
+        buyer = self._register("rc02_buyer")
+        p1 = self._publish(seller["username"], "RC02 A", category="通用")
+        p2 = self._publish(seller["username"], "RC02 B", category="通用")
+        p3 = self._publish(seller["username"], "RC02 C", category="通用")
+
+        # Buyer buys p1 and p2 together
+        self._buy(buyer, p1["id"])
+        self._buy(buyer, p2["id"])
+
+        r = self.client.get(f"/api/v4/recommendations/fbt/{p1['id']}")
+        self.assertEqual(r.status_code, 200, r.text)
+        recs = r.json()["recommendations"]
+        ids = {item["product_id"] for item in recs}
+        # p2 should be recommended (bought together)
+        self.assertIn(p2["id"], ids)
+        # p3 should not be recommended (never bought)
+        self.assertNotIn(p3["id"], ids)
+
+    # ---- RC-03 ----
+    def test_recommendations_public_no_auth(self):
+        """Recommendation endpoints are public (no auth required)."""
+        seller = self._register("rc03_seller")
+        product = self._publish(seller["username"], "RC03 商品")
+
+        r = self.client.get(f"/api/v4/recommendations/similar/{product['id']}")
+        self.assertEqual(r.status_code, 200, r.text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -414,6 +414,14 @@ async def _create_tables(db: aiosqlite.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS wishlist_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, product_id)
+        );
+
         CREATE TABLE IF NOT EXISTS product_reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL REFERENCES products(id),
@@ -4133,5 +4141,191 @@ async def remove_agent_skill(agent_id: int, product_id: int) -> None:
             (agent_id, product_id)
         )
         await db.commit()
+    finally:
+        await db.close()
+
+
+# ===========================================================================
+# v4.3 – Wishlist & Recommendations
+# ===========================================================================
+
+async def add_to_wishlist(user_id: str, product_id: int):
+    """Add a product to user's wishlist. Returns the created item."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT OR IGNORE INTO wishlist_items (user_id, product_id) VALUES (?, ?)",
+            (user_id, product_id),
+        )
+        await db.commit()
+        row_id = cursor.lastrowid
+        cursor = await db.execute(
+            """SELECT wi.id, wi.product_id, p.name as product_name, p.price, p.category
+               FROM wishlist_items wi
+               JOIN products p ON wi.product_id = p.id
+               WHERE wi.id = ?""",
+            (row_id,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "id": row[0], "product_id": row[1], "product_name": row[2],
+                "price": row[3], "category": row[4],
+            }
+        return None
+    finally:
+        await db.close()
+
+
+async def remove_from_wishlist(user_id: str, product_id: int):
+    """Remove a product from user's wishlist. Returns True if removed."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM wishlist_items WHERE user_id = ? AND product_id = ?",
+            (user_id, product_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def get_user_wishlist(user_id: str) -> list[dict]:
+    """Get all items in user's wishlist with product details."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT wi.id, wi.product_id, p.name as product_name, p.price,
+                      p.category, p.seller_name, wi.created_at
+               FROM wishlist_items wi
+               JOIN products p ON wi.product_id = p.id
+               WHERE wi.user_id = ?
+               ORDER BY wi.created_at DESC""",
+            (user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0], "product_id": r[1], "product_name": r[2],
+                "price": r[3], "category": r[4], "seller_name": r[5],
+                "created_at": r[6],
+            }
+            for r in rows
+        ]
+    finally:
+        await db.close()
+
+
+async def is_in_wishlist(user_id: str, product_id: int) -> bool:
+    """Check if a product is in user's wishlist."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT 1 FROM wishlist_items WHERE user_id = ? AND product_id = ?",
+            (user_id, product_id),
+        )
+        row = await cursor.fetchone()
+        return row is not None
+    finally:
+        await db.close()
+
+
+async def get_similar_products(product_id: int, limit: int = 5) -> list[dict]:
+    """Get similar products by category (excluding the product itself)."""
+    db = await get_db()
+    try:
+        # First get the product's category
+        cursor = await db.execute(
+            "SELECT category FROM products WHERE id = ?", (product_id,)
+        )
+        product = await cursor.fetchone()
+        if not product:
+            return []
+
+        category = product[0]
+        cursor = await db.execute(
+            """SELECT id, name, price, category, seller_name, downloads, sales
+               FROM products
+               WHERE category = ? AND id != ?
+               ORDER BY sales DESC, downloads DESC
+               LIMIT ?""",
+            (category, product_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "product_id": r[0], "name": r[1], "price": r[2],
+                "category": r[3], "seller_name": r[4],
+                "downloads": r[5], "sales": r[6],
+            }
+            for r in rows
+        ]
+    finally:
+        await db.close()
+
+
+async def get_frequently_bought_together(product_id: int, limit: int = 5) -> list[dict]:
+    """Get products frequently bought together with the given product.
+
+    Finds products that were purchased by the same buyer who also bought the
+    given product (within the same day).
+    """
+    db = await get_db()
+    try:
+        # Find buyers who purchased the given product
+        cursor = await db.execute(
+            """SELECT buyer_id, created_at
+               FROM transactions
+               WHERE product_id = ? AND status = 'completed'""",
+            (product_id,),
+        )
+        buyer_rows = await cursor.fetchall()
+
+        if not buyer_rows:
+            return []
+
+        # For each buyer, find other products they bought (same day)
+        other_product_ids: set[int] = set()
+        for buyer_id, created_at in buyer_rows:
+            if not created_at:
+                continue
+            # Extract date part (YYYY-MM-DD)
+            date_part = created_at[:10]
+            cursor = await db.execute(
+                """SELECT DISTINCT t.product_id, p.name, p.price, p.category,
+                          p.seller_name, COUNT(*) as co_count
+                   FROM transactions t
+                   JOIN products p ON t.product_id = p.id
+                   WHERE t.buyer_id = ? AND t.product_id != ?
+                     AND t.status = 'completed'
+                     AND substr(t.created_at, 1, 10) = ?
+                   GROUP BY t.product_id
+                   ORDER BY co_count DESC""",
+                (buyer_id, product_id, date_part),
+            )
+            rows = await cursor.fetchall()
+            for row in rows:
+                other_product_ids.add(row[0])
+
+        if not other_product_ids:
+            return []
+
+        # Fetch details for the recommended products
+        placeholders = ",".join("?" for _ in other_product_ids)
+        cursor = await db.execute(
+            f"""SELECT id, name, price, category, seller_name
+               FROM products
+               WHERE id IN ({placeholders})""",
+            tuple(other_product_ids),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "product_id": r[0], "name": r[1], "price": r[2],
+                "category": r[3], "seller_name": r[4],
+            }
+            for r in rows[:limit]
+        ]
     finally:
         await db.close()

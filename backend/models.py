@@ -952,3 +952,36 @@ class SavedSearchResponse(BaseModel):
 
 class SaveSearchResponse(SavedSearchResponse):
     """Alias for SavedSearchResponse (backward compat)."""
+
+
+# ===========================================================================
+# v4.3 – Wishlist & Recommendations
+# ===========================================================================
+
+class WishlistItemResponse(BaseModel):
+    id: int
+    product_id: int
+    product_name: str = ""
+    price: int = 0
+    category: str = ""
+    seller_name: str = ""
+    created_at: Optional[str] = None
+
+
+class WishlistListResponse(BaseModel):
+    items: list[dict]
+
+
+class RecommendationItemResponse(BaseModel):
+    product_id: int
+    name: str = ""
+    price: int = 0
+    category: str = ""
+    seller_name: str = ""
+    views: int = 0
+    purchases: int = 0
+    co_purchase_count: int = 0
+
+
+class RecommendationsResponse(BaseModel):
+    recommendations: list[dict]
