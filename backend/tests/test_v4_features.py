@@ -2846,6 +2846,400 @@ class TestTrialRun(_V4Base):
         self.assertIsNotNone(record["created_at"])
 
 
+# ===========================================================================
+# v4.11 – Bulk Trial Run  (BT-01 … BT-08)
+# ===========================================================================
+
+class TestBulkTrial(_V4Base):
+    """Bulk trial execution: up to 5 products in one call, with skip logic
+    for purchased and over-limit products."""
+
+    def _db_trial_runs(self, user_id: str = None, product_id: int = None) -> list[dict]:
+        if user_id and product_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM trial_runs WHERE user_id = ? AND product_id = ?",
+                (user_id, product_id),
+            ))
+        if user_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM trial_runs WHERE user_id = ?", (user_id,),
+            ))
+        return asyncio.run(_fetchall("SELECT * FROM trial_runs"))
+
+    def _run_single_trial(self, user: dict, product_id: int, input_text: str = "test") -> dict:
+        """Helper: run a single trial via the existing v4.9 endpoint."""
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product_id, "input_text": input_text},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
+    def _seed_trial_limit(self, user_id: str, product_id: int, count: int = 3):
+        """Pre-populate trial_runs to simulate user hitting the trial limit."""
+        for i in range(count):
+            asyncio.run(_fetchall(
+                "INSERT INTO trial_runs "
+                "(user_id, product_id, status, input_text, output_text, "
+                "tokens_used, execution_time_ms) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    user_id, product_id, "completed",
+                    f"pre-seeded trial {i}", f"output {i}",
+                    50 + i * 10, 100 + i * 50,
+                ),
+            ))
+
+    # ---- BT-01 ----
+    def test_bulk_trial_two_products(self):
+        """POST /api/v4/trial/bulk with 2 products executes both and returns
+        completed results for each with trial_id, output, and timing."""
+        user = self._register("bt01_user", "用户BT01")
+        p1 = self._publish(user["username"], "BT01 商品A", price=50,
+                           category="Skill", content="skill A content")
+        p2 = self._publish(user["username"], "BT01 商品B", price=80,
+                           category="Skill", content="skill B content")
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={"product_ids": [p1["id"], p2["id"]], "input_text": "分析数据"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("total", body)
+        self.assertIn("succeeded", body)
+        self.assertIn("skipped", body)
+        self.assertIn("results", body)
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["succeeded"], 2)
+        self.assertEqual(body["skipped"], 0)
+        self.assertEqual(len(body["results"]), 2)
+
+        results_by_pid = {r["product_id"]: r for r in body["results"]}
+        self.assertIn(p1["id"], results_by_pid)
+        self.assertIn(p2["id"], results_by_pid)
+
+        for pid in (p1["id"], p2["id"]):
+            res = results_by_pid[pid]
+            self.assertEqual(res["status"], "completed")
+            self.assertIsNotNone(res.get("trial_id"))
+            self.assertIsInstance(res["trial_id"], int)
+            self.assertIsNotNone(res.get("output_text"))
+            self.assertIsInstance(res["tokens_used"], int)
+            self.assertGreaterEqual(res["tokens_used"], 0)
+            self.assertIsInstance(res["execution_time_ms"], int)
+            self.assertGreaterEqual(res["execution_time_ms"], 0)
+
+        # Verify trial_runs records were created in the DB
+        rows = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows), 2)
+        pids_in_db = {row["product_id"] for row in rows}
+        self.assertIn(p1["id"], pids_in_db)
+        self.assertIn(p2["id"], pids_in_db)
+
+    # ---- BT-02 ----
+    def test_bulk_trial_five_products(self):
+        """POST /api/v4/trial/bulk with exactly 5 products executes all and
+        returns 5 completed results."""
+        user = self._register("bt02_user", "用户BT02")
+        products = []
+        for i in range(5):
+            p = self._publish(
+                user["username"], f"BT02 商品{i}", price=50 + i * 10,
+                category="Skill", content=f"content {i}",
+            )
+            products.append(p)
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={
+                "product_ids": [p["id"] for p in products],
+                "input_text": "批量分析",
+            },
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 5)
+        self.assertEqual(body["succeeded"], 5)
+        self.assertEqual(body["skipped"], 0)
+        self.assertEqual(len(body["results"]), 5)
+        for res in body["results"]:
+            self.assertEqual(res["status"], "completed")
+            self.assertIsNotNone(res.get("trial_id"))
+
+        # Verify all 5 trial records in DB
+        rows = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows), 5)
+
+    # ---- BT-03 ----
+    def test_bulk_trial_more_than_five_rejected(self):
+        """POST /api/v4/trial/bulk with 6+ product_ids returns HTTP 400
+        with an error message."""
+        user = self._register("bt03_user", "用户BT03")
+        # Publish 6 products so the IDs are valid
+        products = []
+        for i in range(6):
+            p = self._publish(
+                user["username"], f"BT03 商品{i}", price=50,
+                category="Skill",
+            )
+            products.append(p)
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={
+                "product_ids": [p["id"] for p in products],
+                "input_text": "test",
+            },
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+
+        # Verify no trial records were created
+        rows = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows), 0)
+
+    # ---- BT-04 ----
+    def test_bulk_trial_skips_purchased(self):
+        """Products already purchased by the user are skipped in bulk trial
+        with skip_reason indicating the purchase."""
+        user = self._register("bt04_user", "用户BT04")
+        p1 = self._publish(user["username"], "BT04 已购商品", price=50,
+                           category="Skill")
+        p2 = self._publish(user["username"], "BT04 未购商品", price=50,
+                           category="Skill")
+
+        # Purchase p1
+        buy_r = self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": p1["id"]},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(buy_r.status_code, 200, buy_r.text)
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={"product_ids": [p1["id"], p2["id"]], "input_text": "test"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["succeeded"], 1)
+        self.assertEqual(body["skipped"], 1)
+        self.assertEqual(len(body["results"]), 2)
+
+        results_by_pid = {r["product_id"]: r for r in body["results"]}
+        # p1 should be skipped
+        self.assertEqual(results_by_pid[p1["id"]]["status"], "skipped")
+        self.assertIsNotNone(results_by_pid[p1["id"]].get("skip_reason"))
+        self.assertIn("购买", results_by_pid[p1["id"]]["skip_reason"])
+        self.assertIsNone(results_by_pid[p1["id"]].get("trial_id"))
+
+        # p2 should succeed
+        self.assertEqual(results_by_pid[p2["id"]]["status"], "completed")
+        self.assertIsNotNone(results_by_pid[p2["id"]].get("trial_id"))
+
+        # Verify only 1 trial record in DB (for p2)
+        rows = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product_id"], p2["id"])
+
+    # ---- BT-05 ----
+    def test_bulk_trial_skips_over_limit(self):
+        """Products where the user has already used all 3 trial runs are
+        skipped with skip_reason about the limit."""
+        user = self._register("bt05_user", "用户BT05")
+        p1 = self._publish(user["username"], "BT05 限次商品", price=50,
+                           category="Skill")
+        p2 = self._publish(user["username"], "BT05 正常商品", price=50,
+                           category="Skill")
+
+        # Pre-seed 3 completed trials for p1 (hitting the limit)
+        self._seed_trial_limit(user["id"], p1["id"], count=3)
+
+        # Verify p1 has exactly 3 trial records
+        rows_before = self._db_trial_runs(user["id"], p1["id"])
+        self.assertEqual(len(rows_before), 3)
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={"product_ids": [p1["id"], p2["id"]], "input_text": "test"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["succeeded"], 1)
+        self.assertEqual(body["skipped"], 1)
+        self.assertEqual(len(body["results"]), 2)
+
+        results_by_pid = {r["product_id"]: r for r in body["results"]}
+        # p1 should be skipped (limit reached)
+        self.assertEqual(results_by_pid[p1["id"]]["status"], "skipped")
+        self.assertIsNotNone(results_by_pid[p1["id"]].get("skip_reason"))
+        self.assertIn("试用次数", results_by_pid[p1["id"]]["skip_reason"])
+        self.assertIsNone(results_by_pid[p1["id"]].get("trial_id"))
+
+        # p2 should succeed
+        self.assertEqual(results_by_pid[p2["id"]]["status"], "completed")
+        self.assertIsNotNone(results_by_pid[p2["id"]].get("trial_id"))
+
+        # Verify no new trial record for p1, but 1 for p2
+        rows_after = self._db_trial_runs(user["id"], p1["id"])
+        self.assertEqual(len(rows_after), 3)  # unchanged
+
+        rows_p2 = self._db_trial_runs(user["id"], p2["id"])
+        self.assertEqual(len(rows_p2), 1)
+
+    # ---- BT-06 ----
+    def test_bulk_trial_mixed_results(self):
+        """Bulk trial with a mix of eligible, purchased, and over-limit
+        products returns correct succeeded/skipped counts and per-product
+        statuses."""
+        user = self._register("bt06_user", "用户BT06")
+        p_eligible = self._publish(user["username"], "BT06 可试用", price=50,
+                                   category="Skill")
+        p_purchased = self._publish(user["username"], "BT06 已购", price=50,
+                                    category="Skill")
+        p_over_limit = self._publish(user["username"], "BT06 限次", price=50,
+                                     category="Skill")
+
+        # Purchase p_purchased
+        self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": p_purchased["id"]},
+            headers=_auth(user["token"]),
+        )
+
+        # Pre-seed 3 trials for p_over_limit
+        self._seed_trial_limit(user["id"], p_over_limit["id"], count=3)
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={
+                "product_ids": [
+                    p_eligible["id"],
+                    p_purchased["id"],
+                    p_over_limit["id"],
+                ],
+                "input_text": "混合测试",
+            },
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["succeeded"], 1)
+        self.assertEqual(body["skipped"], 2)
+        self.assertEqual(len(body["results"]), 3)
+
+        results_by_pid = {r["product_id"]: r for r in body["results"]}
+        self.assertEqual(results_by_pid[p_eligible["id"]]["status"], "completed")
+        self.assertEqual(results_by_pid[p_purchased["id"]]["status"], "skipped")
+        self.assertIn("购买", results_by_pid[p_purchased["id"]]["skip_reason"])
+        self.assertEqual(results_by_pid[p_over_limit["id"]]["status"], "skipped")
+        self.assertIn("试用次数", results_by_pid[p_over_limit["id"]]["skip_reason"])
+
+        # Only 1 new trial record (for p_eligible)
+        rows = self._db_trial_runs(user["id"], p_eligible["id"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product_id"], p_eligible["id"])
+
+    # ---- BT-07 ----
+    def test_bulk_eligibility_check(self):
+        """GET /api/v4/trial/bulk/eligibility returns correct eligibility
+        status for each product, including purchased and over-limit cases."""
+        user = self._register("bt07_user", "用户BT07")
+        p1 = self._publish(user["username"], "BT07 可试用A", price=50,
+                           category="Skill")
+        p2 = self._publish(user["username"], "BT07 可试用B", price=50,
+                           category="Skill")
+        p3 = self._publish(user["username"], "BT07 已购", price=50,
+                           category="Skill")
+
+        # Purchase p3
+        self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": p3["id"]},
+            headers=_auth(user["token"]),
+        )
+
+        # Pre-seed 2 trials for p2 (so 1 remaining)
+        self._seed_trial_limit(user["id"], p2["id"], count=2)
+
+        r = self.client.get(
+            f"/api/v4/trial/bulk/eligibility?product_ids={p1['id']},{p2['id']},{p3['id']}",
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("eligible_count", body)
+        self.assertIn("total_count", body)
+        self.assertIn("products", body)
+        self.assertEqual(body["total_count"], 3)
+        self.assertEqual(body["eligible_count"], 2)
+        self.assertEqual(len(body["products"]), 3)
+
+        products_by_pid = {p["product_id"]: p for p in body["products"]}
+
+        # p1: eligible, 3 trials remaining
+        self.assertTrue(products_by_pid[p1["id"]]["can_trial"])
+        self.assertIsNone(products_by_pid[p1["id"]]["reason"])
+        self.assertEqual(products_by_pid[p1["id"]]["trials_remaining"], 3)
+
+        # p2: eligible, 1 trial remaining
+        self.assertTrue(products_by_pid[p2["id"]]["can_trial"])
+        self.assertEqual(products_by_pid[p2["id"]]["trials_remaining"], 1)
+
+        # p3: not eligible (purchased)
+        self.assertFalse(products_by_pid[p3["id"]]["can_trial"])
+        self.assertIsNotNone(products_by_pid[p3["id"]]["reason"])
+        self.assertIn("购买", products_by_pid[p3["id"]]["reason"])
+        self.assertEqual(products_by_pid[p3["id"]]["trials_remaining"], 0)
+
+    # ---- BT-08 ----
+    def test_bulk_trial_nonexistent_product(self):
+        """Bulk trial with a non-existent product ID handles it gracefully
+        by skipping that product (not crashing the entire request)."""
+        user = self._register("bt08_user", "用户BT08")
+        p1 = self._publish(user["username"], "BT08 真实商品", price=50,
+                           category="Skill")
+
+        r = self.client.post(
+            "/api/v4/trial/bulk",
+            json={
+                "product_ids": [p1["id"], 99999],
+                "input_text": "test nonexistent",
+            },
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["total"], 2)
+
+        results_by_pid = {r["product_id"]: r for r in body["results"]}
+
+        # p1 (real product) should succeed
+        self.assertEqual(results_by_pid[p1["id"]]["status"], "completed")
+        self.assertIsNotNone(results_by_pid[p1["id"]].get("trial_id"))
+
+        # 99999 (non-existent) should be skipped
+        self.assertEqual(results_by_pid[99999]["status"], "skipped")
+        self.assertIsNotNone(results_by_pid[99999].get("skip_reason"))
+        self.assertIsNone(results_by_pid[99999].get("trial_id"))
+
+        # Verify only 1 trial record in DB (for p1)
+        rows = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product_id"], p1["id"])
+
+
 if __name__ == "__main__":
     unittest.main()
 
