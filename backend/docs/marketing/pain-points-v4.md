@@ -59,8 +59,9 @@
 
 **SkillBazaar 对策 (v4.1 已实现)**:
 - ✅ **Skill Versioning** — SemVer 版本管理（skill_versions 表），卖家可为同一 Skill 发布多个版本
-- ✅ **版本历史追踪** — 买家可查看完整版本历史、changelog
-- ✅ **Rollback 机制** — 卖家可回滚到任一历史版本
+  - 自动创建 v1.0.0（产品发布时）
+  - 版本历史追踪（changelog）
+  - Rollback 机制（回滚到任一历史版本）
 - ✅ **User Profiles** — 卖家展示页（GET /api/u/{username}），买家可查看卖家历史、关注卖家动态
 - 卖家信息展示
 
@@ -460,10 +461,11 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - 公开用户主页 | | | | |
 | - Follow/Unfollow 系统 | | | | |
 | - Achievements/Badges | | | | |
-| **Skill Versioning** | v4.1.1 | 🔄 开发中 | TBD | - |
+| **Skill Versioning** | v4.1.1 | ✅ 完成 | 12/12 通过 | 5e0abfd |
 | - SemVer 版本管理 | | | | |
 | - 版本历史 & Changelog | | | | |
 | - Rollback 机制 | | | | |
+| - 自动创建 v1.0.0 | | | | |
 
 ### 进行中功能 🔄
 
@@ -484,9 +486,9 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ### 迭代统计
 
-- **迭代次数**: 2+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning）
-- **测试覆盖率**: 85/115 (73.9%)
-- **代码提交**: 2 次（feat: user profiles v4, test: baseline）
+- **迭代次数**: 3+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → ...）
+- **测试覆盖率**: 97/115 (84.3%)
+- **代码提交**: 3 次（feat: user profiles v4, test: baseline, feat: skill versioning）
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
