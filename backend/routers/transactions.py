@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Cookie
 from models import TransactionCreate
 import services.transaction_service as tx_service
 from routers.user_v2 import get_current_user
@@ -7,10 +7,16 @@ router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
 @router.post("/buy")
-async def buy_product(body: TransactionCreate, user: dict = Depends(get_current_user)):
+async def buy_product(
+    body: TransactionCreate,
+    user: dict = Depends(get_current_user),
+    affiliate_code: str = Cookie(None),
+):
     # Identity always comes from the Bearer token; body.buyer_id is deprecated.
+    # Affiliate code can come from request body or cookie (set by affiliate link click).
+    code = body.affiliate_code or affiliate_code or ""
     try:
-        result = await tx_service.buy_product(user["id"], body.product_id)
+        result = await tx_service.buy_product(user["id"], body.product_id, code)
         return {
             "success": True,
             "message": "购买成功",

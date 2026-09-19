@@ -414,6 +414,33 @@ async def _create_tables(db: aiosqlite.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS affiliate_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            seller_id TEXT NOT NULL REFERENCES users(id),
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            code TEXT NOT NULL UNIQUE,
+            commission_rate REAL DEFAULT 10.0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS affiliate_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            link_id INTEGER NOT NULL REFERENCES affiliate_links(id),
+            ip_address TEXT,
+            user_agent TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS affiliate_conversions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            link_id INTEGER NOT NULL REFERENCES affiliate_links(id),
+            buyer_id TEXT NOT NULL REFERENCES users(id),
+            transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+            commission_amount INTEGER NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS wishlist_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL REFERENCES users(id),
@@ -4327,5 +4354,171 @@ async def get_frequently_bought_together(product_id: int, limit: int = 5) -> lis
             }
             for r in rows[:limit]
         ]
+    finally:
+        await db.close()
+
+
+# ===========================================================================
+# v4.4 – Affiliate Program
+# ===========================================================================
+
+async def create_affiliate_link(seller_id: str, product_id: int, commission_rate: float = 10.0) -> dict:
+    """Create an affiliate link for a product. Returns the link details."""
+    # Verify seller owns the product
+    product = await fetch_product_by_id(product_id)
+    if not product:
+        raise ValueError("Product not found")
+    if product.get("seller_name") != seller_id:
+        raise PermissionError("Not authorized")
+
+    # Generate unique code
+    import secrets
+    code = secrets.token_urlsafe(8)
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO affiliate_links (seller_id, product_id, code, commission_rate) VALUES (?, ?, ?, ?)",
+            (seller_id, product_id, code, commission_rate),
+        )
+        await db.commit()
+        link_id = cursor.lastrowid
+
+        # Build link URL
+        base_url = "http://localhost:8000"  # TODO: make configurable
+        link_url = f"{base_url}/api/v4/affiliate/click/{code}"
+
+        return {
+            "id": link_id,
+            "product_id": product_id,
+            "code": code,
+            "link": link_url,
+            "commission_rate": commission_rate,
+        }
+    finally:
+        await db.close()
+
+
+async def get_affiliate_link_by_code(code: str) -> dict | None:
+    """Get affiliate link by code."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, seller_id, product_id, code, commission_rate, is_active FROM affiliate_links WHERE code = ?",
+            (code,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "id": row[0], "seller_id": row[1], "product_id": row[2],
+                "code": row[3], "commission_rate": row[4], "is_active": row[5],
+            }
+        return None
+    finally:
+        await db.close()
+
+
+async def track_affiliate_click(link_id: int, ip_address: str = None, user_agent: str = None):
+    """Track an affiliate link click."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO affiliate_clicks (link_id, ip_address, user_agent) VALUES (?, ?, ?)",
+            (link_id, ip_address, user_agent),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def track_affiliate_conversion(link_id: int, buyer_id: str, transaction_id: int, product_price: int, commission_rate: float) -> dict:
+    """Track an affiliate conversion (purchase)."""
+    commission_amount = int(product_price * commission_rate / 100)
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO affiliate_conversions (link_id, buyer_id, transaction_id, commission_amount) VALUES (?, ?, ?, ?)",
+            (link_id, buyer_id, transaction_id, commission_amount),
+        )
+        await db.commit()
+        conversion_id = cursor.lastrowid
+
+        return {
+            "id": conversion_id,
+            "link_id": link_id,
+            "buyer_id": buyer_id,
+            "transaction_id": transaction_id,
+            "commission_amount": commission_amount,
+        }
+    finally:
+        await db.close()
+
+
+async def get_affiliate_stats(product_id: int, seller_id: str) -> dict:
+    """Get affiliate statistics for a product."""
+    # Verify seller owns the product
+    product = await fetch_product_by_id(product_id)
+    if not product:
+        raise ValueError("Product not found")
+    if product.get("seller_name") != seller_id:
+        raise PermissionError("Not authorized")
+
+    db = await get_db()
+    try:
+        # Get link ID
+        cursor = await db.execute(
+            "SELECT id FROM affiliate_links WHERE product_id = ? AND seller_id = ?",
+            (product_id, seller_id),
+        )
+        link_row = await cursor.fetchone()
+        if not link_row:
+            return {"clicks": 0, "conversions": 0, "commission_earned": 0, "conversion_rate": 0.0}
+
+        link_id = link_row[0]
+
+        # Count clicks
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM affiliate_clicks WHERE link_id = ?",
+            (link_id,),
+        )
+        clicks = (await cursor.fetchone())[0]
+
+        # Count conversions and sum commission
+        cursor = await db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(commission_amount), 0) FROM affiliate_conversions WHERE link_id = ?",
+            (link_id,),
+        )
+        conv_row = await cursor.fetchone()
+        conversions = conv_row[0]
+        commission_earned = conv_row[1]
+
+        conversion_rate = (conversions / clicks * 100) if clicks > 0 else 0.0
+
+        return {
+            "clicks": clicks,
+            "conversions": conversions,
+            "commission_earned": commission_earned,
+            "conversion_rate": round(conversion_rate, 2),
+        }
+    finally:
+        await db.close()
+
+
+async def get_affiliate_link_for_product(product_id: int, seller_id: str) -> dict | None:
+    """Get affiliate link for a product (if exists)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, product_id, code, commission_rate, is_active FROM affiliate_links WHERE product_id = ? AND seller_id = ?",
+            (product_id, seller_id),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "id": row[0], "product_id": row[1], "code": row[2],
+                "commission_rate": row[3], "is_active": row[4],
+            }
+        return None
     finally:
         await db.close()

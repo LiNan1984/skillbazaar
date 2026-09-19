@@ -80,7 +80,7 @@ class _V4Base(unittest.TestCase):
     """Shared setUp / tearDown for v4 feature tests."""
 
     def setUp(self):
-        """Clear bundle tables before each test to ensure isolation."""
+        """Clear bundle and v4.4 tables before each test to ensure isolation."""
         # Clear tables that might have residual data from other tests
         async def _clear():
             conn = await aiosqlite.connect(db_mod.DB_PATH)
@@ -91,6 +91,10 @@ class _V4Base(unittest.TestCase):
                 await conn.execute("DELETE FROM saved_searches")
                 await conn.execute("DELETE FROM user_agents")
                 await conn.execute("DELETE FROM agent_skills")
+                await conn.execute("DELETE FROM wishlist_items")
+                await conn.execute("DELETE FROM affiliate_conversions")
+                await conn.execute("DELETE FROM affiliate_clicks")
+                await conn.execute("DELETE FROM affiliate_links")
                 await conn.commit()
             finally:
                 await conn.close()
@@ -1101,6 +1105,149 @@ class TestRecommendations(_V4Base):
 
         r = self.client.get(f"/api/v4/recommendations/similar/{product['id']}")
         self.assertEqual(r.status_code, 200, r.text)
+
+
+# ---------------------------------------------------------------------------
+# v4.4 – Affiliate Program
+# ---------------------------------------------------------------------------
+
+class TestAffiliateProgram(_V4Base):
+    """Affiliate/referral program endpoints."""
+
+    # ---- AF-01 ----
+    def test_generate_affiliate_link(self):
+        """Seller can generate an affiliate link for their product."""
+        seller = self._register("af01_seller")
+        product = self._publish(seller["username"], "AF01 商品", price=100)
+
+        r = self.client.post(
+            f"/api/v4/affiliate/generate/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        body = r.json()
+        self.assertIn("link", body)
+        self.assertIn("code", body)
+        self.assertEqual(body["product_id"], product["id"])
+        self.assertEqual(body["commission_rate"], 10)  # Default 10%
+
+    # ---- AF-02 ----
+    def test_affiliate_link_tracks_click(self):
+        """Clicking an affiliate link records a click."""
+        seller = self._register("af02_seller")
+        product = self._publish(seller["username"], "AF02 商品", price=100)
+
+        # Generate affiliate link
+        gen_r = self.client.post(
+            f"/api/v4/affiliate/generate/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(gen_r.status_code, 201)
+        code = gen_r.json()["code"]
+
+        # Simulate click (TestClient follows redirects, so expect 200)
+        r = self.client.get(f"/api/v4/affiliate/click/{code}")
+        self.assertIn(r.status_code, [200, 302])  # 302=redirect, 200=followed
+
+        # Verify click was tracked
+        stats_r = self.client.get(
+            f"/api/v4/affiliate/stats/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(stats_r.status_code, 200)
+        stats = stats_r.json()
+        self.assertEqual(stats["clicks"], 1)
+        self.assertEqual(stats["conversions"], 0)
+
+    # ---- AF-03 ----
+    def test_affiliate_purchase_tracks_conversion(self):
+        """Purchasing via affiliate link tracks conversion and commission."""
+        seller = self._register("af03_seller")
+        buyer = self._register("af03_buyer")
+        product = self._publish(seller["username"], "AF03 商品", price=100)
+
+        # Generate affiliate link
+        gen_r = self.client.post(
+            f"/api/v4/affiliate/generate/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        code = gen_r.json()["code"]
+
+        # Buyer clicks affiliate link
+        self.client.get(f"/api/v4/affiliate/click/{code}")
+
+        # Buyer purchases product
+        buy_r = self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": product["id"]},
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(buy_r.status_code, 200)
+
+        # Verify conversion tracked
+        stats_r = self.client.get(
+            f"/api/v4/affiliate/stats/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        stats = stats_r.json()
+        self.assertEqual(stats["clicks"], 1)
+        self.assertEqual(stats["conversions"], 1)
+        self.assertEqual(stats["commission_earned"], 10)  # 10% of 100
+
+    # ---- AF-04 ----
+    def test_only_seller_can_generate_link(self):
+        """Only the seller can generate affiliate links for their product."""
+        seller = self._register("af04_seller")
+        attacker = self._register("af04_attacker")
+        product = self._publish(seller["username"], "AF04 商品")
+
+        r = self.client.post(
+            f"/api/v4/affiliate/generate/{product['id']}",
+            headers=_auth(attacker["token"]),
+        )
+        self.assertEqual(r.status_code, 403, r.text)
+
+    # ---- AF-05 ----
+    def test_affiliate_stats_aggregate(self):
+        """Affiliate stats aggregate clicks and conversions correctly."""
+        seller = self._register("af05_seller")
+        product = self._publish(seller["username"], "AF05 商品", price=200)
+
+        # Generate affiliate link
+        gen_r = self.client.post(
+            f"/api/v4/affiliate/generate/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        code = gen_r.json()["code"]
+
+        # Simulate multiple clicks
+        for _ in range(5):
+            self.client.get(f"/api/v4/affiliate/click/{code}")
+
+        # Two purchases
+        buyer1 = self._register("af05_buyer1")
+        buyer2 = self._register("af05_buyer2")
+        self.client.get(f"/api/v4/affiliate/click/{code}")
+        self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": product["id"]},
+            headers=_auth(buyer1["token"]),
+        )
+        self.client.get(f"/api/v4/affiliate/click/{code}")
+        self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": product["id"]},
+            headers=_auth(buyer2["token"]),
+        )
+
+        stats_r = self.client.get(
+            f"/api/v4/affiliate/stats/{product['id']}",
+            headers=_auth(seller["token"]),
+        )
+        stats = stats_r.json()
+        self.assertEqual(stats["clicks"], 7)  # 5 + 2
+        self.assertEqual(stats["conversions"], 2)
+        self.assertEqual(stats["commission_earned"], 40)  # 2 * 10% * 200
 
 
 if __name__ == "__main__":

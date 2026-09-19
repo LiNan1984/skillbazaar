@@ -153,6 +153,8 @@ class TransactionCreate(BaseModel):
     # Identity comes from the Bearer token; buyer_id in the body is deprecated
     # and ignored (kept tolerant so legacy clients get a clean 401, not a 422).
     product_id: int
+    affiliate_code: str = ""
+
 
 
 class TransactionResponse(BaseModel):
@@ -985,3 +987,27 @@ class RecommendationItemResponse(BaseModel):
 
 class RecommendationsResponse(BaseModel):
     recommendations: list[dict]
+
+
+# ===========================================================================
+# v4.4 – Affiliate Program
+# ===========================================================================
+
+class AffiliateLinkCreate(BaseModel):
+    product_id: int
+    commission_rate: float = 10.0
+
+
+class AffiliateLinkResponse(BaseModel):
+    id: int
+    product_id: int
+    code: str
+    link: str
+    commission_rate: float = 10.0
+
+
+class AffiliateStatsResponse(BaseModel):
+    clicks: int
+    conversions: int
+    commission_earned: int
+    conversion_rate: float

@@ -23,6 +23,7 @@ from routers.search_v4 import router as search_v4_router
 from routers.bundles_v4 import router as bundles_v4_router
 from routers.wishlist_v4 import router as wishlist_v4_router
 from routers.recommendations_v4 import router as recommendations_v4_router
+from routers.affiliate_v4 import router as affiliate_v4_router
 
 
 @asynccontextmanager
@@ -69,6 +70,7 @@ app.include_router(search_v4_router)
 app.include_router(bundles_v4_router)
 app.include_router(wishlist_v4_router)
 app.include_router(recommendations_v4_router)
+app.include_router(affiliate_v4_router)
 
 
 @app.get("/")

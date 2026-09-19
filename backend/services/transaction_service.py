@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from models import TransactionResponse
 import database
-import services.user_service as user_service
+import services.affiliate_service as affiliate_service
 import services.product_service as product_service
+import services.user_service as user_service
+from models import TransactionResponse
 from services.notification_service import notify
 
 
@@ -23,7 +24,7 @@ class UserNotFoundError(Exception):
     pass
 
 
-async def buy_product(buyer_id: str, product_id: int) -> dict:
+async def buy_product(buyer_id: str, product_id: int, affiliate_code: str = "") -> dict:
     user = await database.fetch_user(buyer_id)
     if user is None:
         raise UserNotFoundError("用户不存在")
@@ -64,6 +65,18 @@ async def buy_product(buyer_id: str, product_id: int) -> dict:
 
     # Track analytics
     await database.increment_purchase(product_id, price * 100)
+
+    # Track affiliate conversion if applicable
+    if affiliate_code:
+        link = await database.get_affiliate_link_by_code(affiliate_code)
+        if link and link.get("is_active", 1):
+            await affiliate_service.track_conversion(
+                link_id=link["id"],
+                buyer_id=buyer_id,
+                transaction_id=tx_id,
+                product_price=price,
+                commission_rate=link.get("commission_rate", 10.0),
+            )
 
     # In-app notifications: buyer always; seller when the product maps to a real user
     await notify(
