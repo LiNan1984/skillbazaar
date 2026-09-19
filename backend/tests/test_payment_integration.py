@@ -1,16 +1,27 @@
-"""Payment Integration tests (PI-01 ~ PI-06).
+"""Payment Integration tests (PI-01 ~ PI-09).
 
 Covers: create payment order, query order status, withdrawal request,
 payment history, earnings summary, payment methods CRUD.
 """
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+import aiosqlite
 
 from fastapi.testclient import TestClient
 
-from main import app
+import database as db_mod
+
+# Isolated temp SQLite DB
+_TMP = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_TMP.close()
+db_mod.DB_PATH = _TMP.name
+
+from main import app  # noqa: E402
 
 
 def _auth(token: str) -> dict:
@@ -20,7 +31,14 @@ def _auth(token: str) -> dict:
 class _PaymentBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
+        db_mod.DB_PATH = _TMP.name
+        cls._client_cm = TestClient(app)
+        cls.client = cls._client_cm.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._client_cm.__exit__(None, None, None)
+        Path(_TMP.name).unlink(missing_ok=True)
 
     def _register(self, suffix: str) -> dict:
         username = f"pay_{suffix}"

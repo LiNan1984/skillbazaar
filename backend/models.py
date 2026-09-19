@@ -723,3 +723,85 @@ class ProductAnalyticsListResponse(BaseModel):
     product_id: int
     product_name: str
     analytics: List[dict]
+
+
+# ---------- Payment Models ----------
+
+class PaymentOrderCreate(BaseModel):
+    product_id: int
+    channel: str = "alipay"
+
+
+class PaymentOrderResponse(BaseModel):
+    id: int
+    user_id: str
+    product_id: int
+    direction: str
+    channel: str
+    external_txn_id: Optional[str] = None
+    amount_cents: int
+    coins_amount: int = 0
+    exchange_rate: float = 1.0
+    platform_fee_cents: int = 0
+    status: str
+    gateway_response: dict = {}
+    failure_reason: str = ""
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class PaymentCallbackRequest(BaseModel):
+    payment_id: int
+    external_txn_id: str
+    status: str
+    amount: int
+
+
+class WithdrawalRequest(BaseModel):
+    amount_coins: int
+    channel: str
+    account_info: dict
+
+
+class WithdrawalResponse(BaseModel):
+    id: int
+    user_id: str
+    amount_cents: int
+    coins_deducted: int
+    channel: str
+    account_info: dict
+    status: str
+    processed_at: Optional[str] = None
+    admin_note: str = ""
+    created_at: Optional[str] = None
+
+
+class PaymentHistoryResponse(BaseModel):
+    items: List[dict]
+    total: int
+    page: int
+    page_size: int
+
+
+class EarningsSummaryResponse(BaseModel):
+    total_earnings_cents: int
+    available_balance_cents: int
+    withdrawn_cents: int
+    pending_withdrawal_cents: int = 0
+
+
+class PaymentMethodCreate(BaseModel):
+    channel: str
+    account_ref: str
+    account_name: str = ""
+
+
+class PaymentMethodResponse(BaseModel):
+    id: int
+    user_id: str
+    channel: str
+    account_ref: str
+    account_name: str
+    is_verified: bool = False
+    is_default: bool = False
+    created_at: Optional[str] = None

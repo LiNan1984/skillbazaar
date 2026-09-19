@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import aiosqlite
 import json
 import random
+import aiosqlite
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "skillbazaar.db")
@@ -495,6 +495,48 @@ async def _create_tables(db: aiosqlite.Connection):
             visits INTEGER DEFAULT 0,
             conversions INTEGER DEFAULT 0,
             UNIQUE(product_id, date, source)
+        );
+
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            product_id INTEGER REFERENCES products(id),
+            direction TEXT NOT NULL CHECK(direction IN ('purchase', 'withdraw')),
+            channel TEXT NOT NULL DEFAULT 'coins',
+            external_txn_id TEXT,
+            amount_cents INTEGER NOT NULL,
+            coins_amount INTEGER DEFAULT 0,
+            exchange_rate REAL DEFAULT 1.0,
+            platform_fee_cents INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            gateway_response TEXT DEFAULT '{}',
+            failure_reason TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS withdrawal_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            amount_cents INTEGER NOT NULL,
+            coins_deducted INTEGER NOT NULL,
+            channel TEXT NOT NULL,
+            account_info TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            processed_at TEXT,
+            admin_note TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_methods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            channel TEXT NOT NULL,
+            account_ref TEXT NOT NULL,
+            account_name TEXT DEFAULT '',
+            is_verified INTEGER DEFAULT 0,
+            is_default INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
         );
     """)
     await db.commit()
@@ -3517,5 +3559,220 @@ async def get_seller_products(seller_name: str) -> list[dict]:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+# ---------- Payment Functions ----------
+
+async def create_payment_order(user_id: str, product_id: int, channel: str, amount_cents: int) -> dict:
+    """Create a payment order."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO payments (user_id, product_id, direction, channel, amount_cents, status)
+               VALUES (?, ?, 'purchase', ?, ?, 'pending')""",
+            (user_id, product_id, channel, amount_cents)
+        )
+        await db.commit()
+        payment_id = cursor.lastrowid
+        cursor = await db.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+        row = await cursor.fetchone()
+        result = dict(row)
+        # Parse gateway_response from JSON string to dict
+        if isinstance(result.get("gateway_response"), str):
+            try:
+                result["gateway_response"] = json.loads(result["gateway_response"])
+            except (json.JSONDecodeError, TypeError):
+                result["gateway_response"] = {}
+        return result
+    finally:
+        await db.close()
+
+
+async def get_payment_order(payment_id: int) -> dict | None:
+    """Get a payment order by ID."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+        row = await cursor.fetchone()
+        if row:
+            result = dict(row)
+            # Parse gateway_response from JSON string to dict
+            if isinstance(result.get("gateway_response"), str):
+                try:
+                    result["gateway_response"] = json.loads(result["gateway_response"])
+                except (json.JSONDecodeError, TypeError):
+                    result["gateway_response"] = {}
+            return result
+        return None
+    finally:
+        await db.close()
+
+
+async def update_payment_status(payment_id: int, status: str, external_txn_id: str = None, gateway_response: dict = None) -> dict | None:
+    """Update payment order status."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """UPDATE payments
+               SET status = ?, external_txn_id = COALESCE(?, external_txn_id),
+                   gateway_response = COALESCE(?, gateway_response),
+                   updated_at = datetime('now')
+               WHERE id = ?""",
+            (status, external_txn_id, str(gateway_response) if gateway_response else None, payment_id)
+        )
+        await db.commit()
+        if cursor.rowcount > 0:
+            cursor = await db.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+            row = await cursor.fetchone()
+            result = dict(row)
+            # Parse gateway_response from JSON string to dict
+            if isinstance(result.get("gateway_response"), str):
+                try:
+                    result["gateway_response"] = json.loads(result["gateway_response"])
+                except (json.JSONDecodeError, TypeError):
+                    result["gateway_response"] = {}
+            return result
+        return None
+    finally:
+        await db.close()
+
+
+async def get_payment_history(user_id: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """Get user's payment history."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) as total FROM payments WHERE user_id = ?",
+            (user_id,)
+        )
+        total = (await cursor.fetchone())["total"]
+
+        offset = (page - 1) * page_size
+        cursor = await db.execute(
+            """SELECT * FROM payments WHERE user_id = ?
+               ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+            (user_id, page_size, offset)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows], total
+    finally:
+        await db.close()
+
+
+async def create_withdrawal(user_id: str, amount_cents: int, coins_deducted: int, channel: str, account_info: dict) -> dict:
+    """Create a withdrawal request."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO withdrawal_records (user_id, amount_cents, coins_deducted, channel, account_info, status)
+               VALUES (?, ?, ?, ?, ?, 'pending')""",
+            (user_id, amount_cents, coins_deducted, channel, json.dumps(account_info))
+        )
+        await db.commit()
+        withdrawal_id = cursor.lastrowid
+        cursor = await db.execute("SELECT * FROM withdrawal_records WHERE id = ?", (withdrawal_id,))
+        row = await cursor.fetchone()
+        result = dict(row)
+        # Parse account_info from JSON string to dict
+        if isinstance(result.get("account_info"), str):
+            try:
+                result["account_info"] = json.loads(result["account_info"])
+            except (json.JSONDecodeError, TypeError):
+                result["account_info"] = {}
+        return result
+    finally:
+        await db.close()
+
+
+async def get_earnings_summary(user_id: str) -> dict:
+    """Get earnings summary for a user."""
+    db = await get_db()
+    try:
+        # Total earnings (completed purchases where user is seller)
+        cursor = await db.execute(
+            """SELECT COALESCE(SUM(amount_cents), 0) as total
+               FROM payments
+               WHERE product_id IN (SELECT id FROM products WHERE seller_name = (
+                   SELECT username FROM users WHERE id = ?
+               )) AND direction = 'purchase' AND status = 'completed'""",
+            (user_id,)
+        )
+        total_earnings = (await cursor.fetchone())["total"]
+
+        # Withdrawn amount
+        cursor = await db.execute(
+            "SELECT COALESCE(SUM(amount_cents), 0) as total FROM withdrawal_records WHERE user_id = ? AND status = 'completed'",
+            (user_id,)
+        )
+        withdrawn = (await cursor.fetchone())["total"]
+
+        # Pending withdrawal
+        cursor = await db.execute(
+            "SELECT COALESCE(SUM(amount_cents), 0) as total FROM withdrawal_records WHERE user_id = ? AND status = 'pending'",
+            (user_id,)
+        )
+        pending = (await cursor.fetchone())["total"]
+
+        return {
+            "total_earnings_cents": total_earnings,
+            "available_balance_cents": total_earnings - withdrawn - pending,
+            "withdrawn_cents": withdrawn,
+            "pending_withdrawal_cents": pending,
+        }
+    finally:
+        await db.close()
+
+
+async def create_payment_method(user_id: str, channel: str, account_ref: str, account_name: str = "") -> dict:
+    """Create a payment method."""
+    db = await get_db()
+    try:
+        # Check if this is the first method (make it default)
+        cursor = await db.execute(
+            "SELECT COUNT(*) as count FROM payment_methods WHERE user_id = ?",
+            (user_id,)
+        )
+        is_first = (await cursor.fetchone())["count"] == 0
+
+        cursor = await db.execute(
+            """INSERT INTO payment_methods (user_id, channel, account_ref, account_name, is_default)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, channel, account_ref, account_name, 1 if is_first else 0)
+        )
+        await db.commit()
+        method_id = cursor.lastrowid
+        cursor = await db.execute("SELECT * FROM payment_methods WHERE id = ?", (method_id,))
+        row = await cursor.fetchone()
+        return dict(row)
+    finally:
+        await db.close()
+
+
+async def get_payment_methods(user_id: str) -> list[dict]:
+    """Get user's payment methods."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM payment_methods WHERE user_id = ?",
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def delete_payment_method(method_id: int, user_id: str) -> bool:
+    """Delete a payment method."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM payment_methods WHERE id = ? AND user_id = ?",
+            (method_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
     finally:
         await db.close()
