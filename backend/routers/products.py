@@ -7,6 +7,8 @@ from models import ProductCreate, ProductResponse, ProductList, ReviewCreate
 import services.product_service as product_service
 import database as db
 from routers.user_v2 import get_current_user
+import asyncio
+from services import analytics_service
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -59,6 +61,12 @@ async def get_product(product_id: int):
                 except (json.JSONDecodeError, TypeError):
                     report[field] = []
         product.eval_report = report
+
+    # Track view (non-blocking)
+    asyncio.create_task(
+        analytics_service.record_view(product_id, None, "direct", None)
+    )
+
     return product
 
 

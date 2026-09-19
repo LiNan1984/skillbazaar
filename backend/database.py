@@ -469,6 +469,33 @@ async def _create_tables(db: aiosqlite.Connection):
             created_by TEXT REFERENCES users(id),
             UNIQUE(product_id, version)
         );
+
+        CREATE TABLE IF NOT EXISTS product_analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            date TEXT NOT NULL,  -- YYYY-MM-DD
+            views INTEGER DEFAULT 0,
+            unique_visitors INTEGER DEFAULT 0,
+            cart_adds INTEGER DEFAULT 0,
+            purchases INTEGER DEFAULT 0,
+            revenue_cents INTEGER DEFAULT 0,
+            search_impressions INTEGER DEFAULT 0,
+            search_clicks INTEGER DEFAULT 0,
+            chat_mentions INTEGER DEFAULT 0,
+            bounce_rate REAL DEFAULT 0,
+            avg_view_duration_sec INTEGER DEFAULT 0,
+            UNIQUE(product_id, date)
+        );
+
+        CREATE TABLE IF NOT EXISTS product_traffic_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            date TEXT NOT NULL,
+            source TEXT NOT NULL,  -- search / chat / direct / referral / social
+            visits INTEGER DEFAULT 0,
+            conversions INTEGER DEFAULT 0,
+            UNIQUE(product_id, date, source)
+        );
     """)
     await db.commit()
 
@@ -3327,5 +3354,168 @@ async def get_current_version(product_id: str) -> dict | None:
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+# ---------- Analytics Helpers ----------
+
+async def record_product_view(product_id: int, user_id: str | None, source: str, session_id: str | None) -> None:
+    """Record a product view for analytics."""
+    db = await get_db()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        # Upsert: increment views, track unique visitor if first view today
+        await db.execute("""
+            INSERT INTO product_analytics (product_id, date, views, unique_visitors)
+            VALUES (?, ?, 1, 1)
+            ON CONFLICT(product_id, date) DO UPDATE SET
+                views = views + 1,
+                unique_visitors = unique_visitors + CASE
+                    WHEN NOT EXISTS (
+                        SELECT 1 FROM product_analytics
+                        WHERE product_id = ? AND date = ?
+                        AND id != excluded.id
+                        AND (unique_visitors > 0 OR views > 1)
+                    ) THEN 1 ELSE 0 END
+        """, (product_id, today, product_id, today))
+
+        # Track traffic source
+        await db.execute("""
+            INSERT INTO product_traffic_sources (product_id, date, source, visits)
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(product_id, date, source) DO UPDATE SET
+                visits = visits + 1
+        """, (product_id, today, source))
+
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def increment_search_impression(product_id: int) -> None:
+    """Track a search impression for a product."""
+    db = await get_db()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        await db.execute("""
+            INSERT INTO product_analytics (product_id, date, search_impressions)
+            VALUES (?, ?, 1)
+            ON CONFLICT(product_id, date) DO UPDATE SET
+                search_impressions = search_impressions + 1
+        """, (product_id, today))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def increment_search_click(product_id: int) -> None:
+    """Track a search click for a product."""
+    db = await get_db()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        await db.execute("""
+            INSERT INTO product_analytics (product_id, date, search_clicks)
+            VALUES (?, ?, 1)
+            ON CONFLICT(product_id, date) DO UPDATE SET
+                search_clicks = search_clicks + 1
+        """, (product_id, today))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def increment_purchase(product_id: int, amount_cents: int) -> None:
+    """Track a purchase for a product."""
+    db = await get_db()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        await db.execute("""
+            INSERT INTO product_analytics (product_id, date, purchases, revenue_cents)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(product_id, date) DO UPDATE SET
+                purchases = purchases + 1,
+                revenue_cents = revenue_cents + ?
+        """, (product_id, today, amount_cents, amount_cents))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def get_product_analytics_by_date(product_id: int, start_date: str, end_date: str) -> list[dict]:
+    """Get daily analytics for a product within a date range."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("""
+            SELECT date, views, unique_visitors, cart_adds, purchases,
+                   revenue_cents, search_impressions, search_clicks,
+                   chat_mentions, bounce_rate, avg_view_duration_sec
+            FROM product_analytics
+            WHERE product_id = ? AND date BETWEEN ? AND ?
+            ORDER BY date ASC
+        """, (product_id, start_date, end_date))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_traffic_sources(product_id: int, start_date: str, end_date: str) -> list[dict]:
+    """Get traffic source breakdown for a product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("""
+            SELECT source, SUM(visits) as visits, SUM(conversions) as conversions
+            FROM product_traffic_sources
+            WHERE product_id = ? AND date BETWEEN ? AND ?
+            GROUP BY source
+            ORDER BY visits DESC
+        """, (product_id, start_date, end_date))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_top_products_for_seller(seller_name: str, metric: str, limit: int) -> list[dict]:
+    """Get top performing products for a seller by metric."""
+    db = await get_db()
+    try:
+        # Map metric to column
+        metric_map = {
+            "views": "COALESCE(SUM(a.views), 0)",
+            "purchases": "COALESCE(SUM(a.purchases), 0)",
+            "revenue": "COALESCE(SUM(a.revenue_cents), 0)",
+        }
+        order_col = metric_map.get(metric, "COALESCE(SUM(a.revenue_cents), 0)")
+
+        cursor = await db.execute(f"""
+            SELECT p.id, p.name, p.price,
+                   COALESCE(SUM(a.views), 0) as views,
+                   COALESCE(SUM(a.purchases), 0) as purchases,
+                   COALESCE(SUM(a.revenue_cents), 0) as revenue_cents
+            FROM products p
+            LEFT JOIN product_analytics a ON p.id = a.product_id
+            WHERE p.seller_name = ?
+            GROUP BY p.id, p.name, p.price
+            ORDER BY {order_col} DESC
+            LIMIT ?
+        """, (seller_name, limit))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_seller_products(seller_name: str) -> list[dict]:
+    """Get all products for a seller."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, name, price FROM products WHERE seller_name = ?",
+            (seller_name,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
     finally:
         await db.close()

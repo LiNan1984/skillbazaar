@@ -62,6 +62,9 @@ async def buy_product(buyer_id: str, product_id: int) -> dict:
         "description": f"购买「{product['name']}」 -{price} 金币",
     })
 
+    # Track analytics
+    await database.increment_purchase(product_id, price * 100)
+
     # In-app notifications: buyer always; seller when the product maps to a real user
     await notify(
         buyer_id, "product_bought",

@@ -15,6 +15,7 @@ from routers.sandbox import router as sandbox_router
 from routers.discovery import router as discovery_router
 from routers.profiles import router as profiles_router
 from routers.versions import router as versions_router
+from routers.analytics import router as analytics_router
 
 
 @asynccontextmanager
@@ -53,6 +54,7 @@ app.include_router(sandbox_router)
 app.include_router(discovery_router)
 app.include_router(profiles_router)
 app.include_router(versions_router)
+app.include_router(analytics_router)
 
 
 @app.get("/")

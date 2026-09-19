@@ -676,3 +676,50 @@ class AgentRunResponse(BaseModel):
     tokens_used: int = 0
     status: str
     created_at: Optional[str] = None
+
+
+# ---------- Analytics Models ----------
+
+class DailyAnalytics(BaseModel):
+    date: str
+    views: int
+    unique_visitors: int
+    cart_adds: int
+    purchases: int
+    revenue_cents: int
+    conversion_rate: float
+
+
+class TrafficSource(BaseModel):
+    source: str
+    visits: int
+    conversions: int
+    conversion_rate: float
+
+
+class TopProduct(BaseModel):
+    product_id: int
+    product_name: str
+    views: int
+    purchases: int
+    revenue_cents: int
+
+
+class SellerDashboardResponse(BaseModel):
+    total_views: int
+    total_purchases: int
+    total_revenue_cents: int
+    avg_conversion_rate: float
+    top_products: List[TopProduct]
+
+
+class ProductAnalyticsResponse(BaseModel):
+    product_id: int
+    product_name: str
+    analytics: List[DailyAnalytics]
+
+
+class ProductAnalyticsListResponse(BaseModel):
+    product_id: int
+    product_name: str
+    analytics: List[dict]
