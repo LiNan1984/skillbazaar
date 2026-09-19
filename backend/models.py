@@ -1011,3 +1011,17 @@ class AffiliateStatsResponse(BaseModel):
     conversions: int
     commission_earned: int
     conversion_rate: float
+
+
+# ===========================================================================
+# v4.5 – Semantic Search
+# ===========================================================================
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str = Field("", min_length=0, description="Search query text")
+    limit: int = Field(10, ge=1, le=50, description="Maximum number of results")
+
+
+class SemanticSearchResponse(BaseModel):
+    results: list[dict]

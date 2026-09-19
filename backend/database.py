@@ -23,6 +23,7 @@ async def init_db():
     finally:
         await db.close()
     await seed_default_activity()
+    await init_semantic_search()
 
 
 async def _create_tables(db: aiosqlite.Connection):
@@ -4520,5 +4521,76 @@ async def get_affiliate_link_for_product(product_id: int, seller_id: str) -> dic
                 "commission_rate": row[3], "is_active": row[4],
             }
         return None
+    finally:
+        await db.close()
+
+
+# ===========================================================================
+# v4.5 – Semantic Search (Embeddings)
+# ===========================================================================
+
+async def init_semantic_search() -> None:
+    """Create the product_embeddings table if it does not already exist."""
+    db = await get_db()
+    try:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS product_embeddings (
+                product_id INTEGER PRIMARY KEY REFERENCES products(id),
+                embedding TEXT NOT NULL,
+                model_version TEXT DEFAULT 'v1',
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def save_product_embedding(product_id: int, embedding: list[float]) -> None:
+    """Save or update the embedding vector for a product."""
+    db = await get_db()
+    try:
+        await db.execute(
+            """INSERT INTO product_embeddings (product_id, embedding, model_version, updated_at)
+               VALUES (?, ?, 'v1', datetime('now'))
+               ON CONFLICT(product_id) DO UPDATE SET
+                   embedding = excluded.embedding,
+                   model_version = 'v1',
+                   updated_at = datetime('now')""",
+            (product_id, json.dumps(embedding, ensure_ascii=False)),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def get_product_embedding(product_id: int) -> list[float] | None:
+    """Retrieve the embedding vector for a single product, or None if not indexed."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT embedding FROM product_embeddings WHERE product_id = ?",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return json.loads(row[0])
+        return None
+    finally:
+        await db.close()
+
+
+async def get_all_product_embeddings() -> list[dict]:
+    """Return all (product_id, embedding) pairs from the embeddings table."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT product_id, embedding FROM product_embeddings",
+        )
+        rows = await cursor.fetchall()
+        return [
+            {"product_id": r[0], "embedding": json.loads(r[1])}
+            for r in rows
+        ]
     finally:
         await db.close()

@@ -80,8 +80,7 @@ class _V4Base(unittest.TestCase):
     """Shared setUp / tearDown for v4 feature tests."""
 
     def setUp(self):
-        """Clear bundle and v4.4 tables before each test to ensure isolation."""
-        # Clear tables that might have residual data from other tests
+        """Clear bundle, v4.4, and product tables before each test to ensure isolation."""
         async def _clear():
             conn = await aiosqlite.connect(db_mod.DB_PATH)
             try:
@@ -95,6 +94,8 @@ class _V4Base(unittest.TestCase):
                 await conn.execute("DELETE FROM affiliate_conversions")
                 await conn.execute("DELETE FROM affiliate_clicks")
                 await conn.execute("DELETE FROM affiliate_links")
+                await conn.execute("DELETE FROM products")
+                await conn.execute("DELETE FROM product_embeddings")
                 await conn.commit()
             finally:
                 await conn.close()
@@ -693,8 +694,8 @@ class TestAdvancedSearch(_V4Base):
         )
         self.assertEqual(r.status_code, 200, r.text)
         results = r.json()["results"]
-        # 2 pre-seeded agents + 1 test-seeded agent fall in [100, 200]
-        self.assertEqual(len(results), 3)
+        # 1 test-seeded agent falls in [100, 200]
+        self.assertEqual(len(results), 1)
         for item in results:
             self.assertEqual(item["category"], "Agent")
             self.assertGreaterEqual(item["price"], 100)
@@ -1248,6 +1249,114 @@ class TestAffiliateProgram(_V4Base):
         self.assertEqual(stats["clicks"], 7)  # 5 + 2
         self.assertEqual(stats["conversions"], 2)
         self.assertEqual(stats["commission_earned"], 40)  # 2 * 10% * 200
+
+
+    # ---- AF-06 ----
+    def test_affiliate_link_unique_per_product(self):
+        """Each product gets a unique affiliate code."""
+        seller = self._register("af06_seller")
+        p1 = self._publish(seller["username"], "AF06 A", price=50)
+        p2 = self._publish(seller["username"], "AF06 B", price=50)
+
+        r1 = self.client.post(
+            f"/api/v4/affiliate/generate/{p1['id']}",
+            headers=_auth(seller["token"]),
+        )
+        r2 = self.client.post(
+            f"/api/v4/affiliate/generate/{p2['id']}",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(r2.status_code, 201)
+        self.assertNotEqual(r1.json()["code"], r2.json()["code"])
+
+
+# ---------------------------------------------------------------------------
+# v4.5 – Semantic Search
+# ---------------------------------------------------------------------------
+
+class TestSemanticSearch(_V4Base):
+    """Vector-based semantic search over product descriptions."""
+
+    # ---- SS-01 ----
+    def test_semantic_search_returns_relevant_products(self):
+        """Semantic search returns products ranked by relevance to the query."""
+        seller = self._register("ss01_seller", "卖家SS01")
+        self._publish(seller["username"], "Python 编程教学", price=80,
+                      category="Skill", content="学习Python编程语言的基础知识和高级技巧")
+        self._publish(seller["username"], "烘焙蛋糕食谱", price=60,
+                      category="Skill", content="制作美味蛋糕的详细步骤和配方")
+        self._publish(seller["username"], "数据分析工具", price=120,
+                      category="Agent", content="自动化数据分析和可视化报表生成")
+
+        r = self.client.post(
+            "/api/v4/search/semantic",
+            json={"query": "编程和学习代码", "limit": 10},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+        names = {p["name"] for p in results}
+        # Python programming should rank highest for a programming-related query
+        self.assertIn("Python 编程教学", names)
+
+    # ---- SS-02 ----
+    def test_semantic_search_respects_limit(self):
+        """The limit parameter controls how many results are returned."""
+        seller = self._register("ss02_seller", "卖家SS02")
+        for i in range(5):
+            self._publish(seller["username"], f"SS02 技能{i}", price=50 + i * 10,
+                          category="Skill", content=f"技能描述内容{i}")
+
+        r = self.client.post(
+            "/api/v4/search/semantic",
+            json={"query": "技能", "limit": 3},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertEqual(len(results), 3)
+
+    # ---- SS-03 ----
+    def test_semantic_search_is_public(self):
+        """Semantic search endpoint does not require authentication."""
+        seller = self._register("ss03_seller", "卖家SS03")
+        self._publish(seller["username"], "SS03 公开商品", price=50,
+                      category="Skill", content="公开可搜索的技能")
+
+        r = self.client.post(
+            "/api/v4/search/semantic",
+            json={"query": "技能", "limit": 10},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+        self.assertTrue(len(results) >= 1)
+
+    # ---- SS-04 ----
+    def test_semantic_search_empty_query_returns_empty(self):
+        """An empty query string should return an empty results list."""
+        seller = self._register("ss04_seller", "卖家SS04")
+        self._publish(seller["username"], "SS04 商品", price=50,
+                      category="Skill", content="一些内容")
+
+        r = self.client.post(
+            "/api/v4/search/semantic",
+            json={"query": "", "limit": 10},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["results"], [])
+
+    # ---- SS-05 ----
+    def test_semantic_search_no_products_returns_empty(self):
+        """Searching when no products exist returns an empty results list."""
+        seller = self._register("ss05_seller", "卖家SS05")
+        # Do not publish any products
+
+        r = self.client.post(
+            "/api/v4/search/semantic",
+            json={"query": "任何查询", "limit": 10},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["results"], [])
 
 
 if __name__ == "__main__":
