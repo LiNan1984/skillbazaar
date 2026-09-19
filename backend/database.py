@@ -455,6 +455,20 @@ async def _create_tables(db: aiosqlite.Connection):
             timeout INTEGER DEFAULT 3600,
             pid INTEGER
         );
+
+        CREATE TABLE IF NOT EXISTS skill_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id TEXT NOT NULL REFERENCES products(id),
+            version TEXT NOT NULL,
+            changelog TEXT DEFAULT '',
+            content_preview TEXT,
+            skill_asset BLOB,
+            skill_asset_hash TEXT,
+            is_current INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            created_by TEXT REFERENCES users(id),
+            UNIQUE(product_id, version)
+        );
     """)
     await db.commit()
 
@@ -1026,8 +1040,17 @@ async def insert_product(data: dict) -> int:
                 datetime.now().isoformat(),
             ),
         )
+        product_id = cursor.lastrowid
         await db.commit()
-        return cursor.lastrowid
+        # Create initial version 1.0.0 for the product
+        await create_skill_version({
+            "product_id": str(product_id),
+            "changelog": "初始版本",
+            "content_preview": data.get("content_preview"),
+            "created_by": data.get("seller_name"),
+        })
+        await db.commit()
+        return product_id
     finally:
         await db.close()
 
@@ -3129,5 +3152,180 @@ async def add_user_achievement(user_id: str, badge: str) -> bool:
         )
         await db.commit()
         return True
+    finally:
+        await db.close()
+
+
+# ---------- Skill Version Helpers ----------
+
+
+async def create_skill_version(data: dict) -> dict:
+    """Create a new version for a product.
+
+    Automatically computes the next version number (1.0.0, 2.0.0, ...),
+    sets is_current=1 on the new version, and unsets previous versions.
+    """
+    db = await get_db()
+    try:
+        now = datetime.now().isoformat()
+        # Count existing versions to determine next version number
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM skill_versions WHERE product_id = ?",
+            (data["product_id"],),
+        )
+        count = (await cursor.fetchone())[0]
+        next_version = f"{(count + 1)}.0.0"
+
+        # Unset all previous is_current flags
+        await db.execute(
+            "UPDATE skill_versions SET is_current = 0 WHERE product_id = ?",
+            (data["product_id"],),
+        )
+
+        # Insert new version as current
+        cursor = await db.execute(
+            """INSERT INTO skill_versions
+            (product_id, version, changelog, content_preview, skill_asset,
+             skill_asset_hash, is_current, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+            (
+                data["product_id"],
+                next_version,
+                data.get("changelog", ""),
+                data.get("content_preview"),
+                data.get("skill_asset"),
+                data.get("skill_asset_hash"),
+                data.get("created_by"),
+                now,
+            ),
+        )
+        await db.commit()
+        version_id = cursor.lastrowid
+        # Fetch and return the inserted row
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE id = ?", (version_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_skill_versions(product_id: str) -> list[dict]:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE product_id = ? ORDER BY id ASC",
+            (product_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_skill_version(product_id: str, version: str) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE product_id = ? AND version = ?",
+            (product_id, version),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def update_version_changelog(product_id: str, version: str, changelog: str) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE skill_versions SET changelog = ? WHERE product_id = ? AND version = ?",
+            (changelog, product_id, version),
+        )
+        await db.commit()
+        if cursor.rowcount == 0:
+            return None
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE product_id = ? AND version = ?",
+            (product_id, version),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def rollback_to_version(product_id: str, target_version: str, user_id: str) -> dict | None:
+    """Rollback: create a new version that copies the content of the target version."""
+    db = await get_db()
+    try:
+        # Fetch the target version
+        target = await get_skill_version(product_id, target_version)
+        if target is None:
+            return None
+
+        now = datetime.now().isoformat()
+
+        # Unset all previous is_current flags
+        await db.execute(
+            "UPDATE skill_versions SET is_current = 0 WHERE product_id = ?",
+            (product_id,),
+        )
+
+        # Count existing to get next version number
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM skill_versions WHERE product_id = ?",
+            (product_id,),
+        )
+        count = (await cursor.fetchone())[0]
+        next_version = f"{(count + 1)}.0.0"
+
+        # Build rollback changelog
+        base_changelog = target.get("changelog", "")
+        rollback_note = f"Rolled back to {target_version}"
+        if base_changelog:
+            changelog = f"{rollback_note}: {base_changelog}"
+        else:
+            changelog = rollback_note
+
+        # Insert new version with content from target
+        cursor = await db.execute(
+            """INSERT INTO skill_versions
+            (product_id, version, changelog, content_preview, skill_asset,
+             skill_asset_hash, is_current, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+            (
+                product_id,
+                next_version,
+                changelog,
+                target.get("content_preview"),
+                target.get("skill_asset"),
+                target.get("skill_asset_hash"),
+                user_id,
+                now,
+            ),
+        )
+        await db.commit()
+        version_id = cursor.lastrowid
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE id = ?", (version_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_current_version(product_id: str) -> dict | None:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM skill_versions WHERE product_id = ? AND is_current = 1",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
     finally:
         await db.close()

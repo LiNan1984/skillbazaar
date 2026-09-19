@@ -297,6 +297,30 @@ class SkillAssetResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+class SkillVersionCreate(BaseModel):
+    changelog: str = ""
+    content_preview: Optional[str] = None
+
+
+class SkillVersionResponse(BaseModel):
+    id: int
+    product_id: int
+    version: str
+    changelog: str
+    content_preview: Optional[str] = None
+    is_current: bool
+    created_at: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class SkillVersionList(BaseModel):
+    versions: list[SkillVersionResponse]
+
+
+class SkillRollbackRequest(BaseModel):
+    target_version: str
+
+
 class SkillExecutionRequest(BaseModel):
     product_id: int
     user_id: Optional[str] = None

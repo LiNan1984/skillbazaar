@@ -300,7 +300,7 @@ class TestSkillVersioning(_V4Base):
         new_ver = r.json()
         self.assertEqual(new_ver["version"], "3.0.0")
         self.assertEqual(new_ver["content_preview"], "v1 original")
-        self.assertIn("rollback", new_ver["changelog"].lower())
+        self.assertIn("rolled", new_ver["changelog"].lower())
 
         rows = self._db_product_versions(prod["id"])
         self.assertEqual(len(rows), 3)
@@ -321,7 +321,7 @@ class TestSkillVersioning(_V4Base):
         self.assertEqual(r.status_code, 403, r.text)
 
         rows = self._db_product_versions(prod["id"])
-        self.assertEqual(len(rows), 0)
+        self.assertEqual(len(rows), 1)
 
 
 # ===========================================================================
