@@ -2848,3 +2848,258 @@ class TestTrialRun(_V4Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ===========================================================================
+# v4.10 – Comparison Tool  (CT-01 … CT-08)
+# ===========================================================================
+
+class TestComparisonTool(_V4Base):
+    """Side-by-side comparison of up to 4 products."""
+
+    def _make_eval_product(self, seller_name: str, name: str,
+                           eval_score: float, eval_status: str = "passed",
+                           price: int = 50, category: str = "Skill") -> dict:
+        """Publish a product and set eval_score + eval_status on it.
+
+        Uses ALTER TABLE to add v4.8/v4.10 columns if they don't exist yet,
+        mirroring the pattern used by _make_subscription_product.
+        """
+        prod = self._publish(seller_name, name, price=price,
+                             category=category)
+
+        async def _configure():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            try:
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN eval_score REAL"
+                    )
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(
+                        "ALTER TABLE products ADD COLUMN eval_status TEXT DEFAULT 'pending'"
+                    )
+                except Exception:
+                    pass
+                await conn.commit()
+            finally:
+                await conn.close()
+        asyncio.run(_configure())
+
+        asyncio.run(_fetchall(
+            "UPDATE products SET eval_score = ?, eval_status = ? WHERE id = ?",
+            (eval_score, eval_status, prod["id"]),
+        ))
+        return prod
+
+    def _seed_analytics(self, product_id: int, views: int = 10,
+                        purchases: int = 5, revenue_cents: int = 250):
+        """Insert product_analytics rows so sales/downloads are available."""
+        today = datetime.date.today().isoformat()
+        asyncio.run(_fetchall(
+            "INSERT INTO product_analytics "
+            "(product_id, date, views, purchases, revenue_cents) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (product_id, today, views, purchases, revenue_cents),
+        ))
+
+    def _compare_url(self, product_ids: list[int]) -> str:
+        return "/api/v4/compare?" + "&".join(
+            f"product_ids={pid}" for pid in product_ids
+        )
+
+    # ---- CT-01 ----
+    def test_compare_two_products(self):
+        """GET /api/v4/compare with 2 product_ids returns data for both
+        products in the products array."""
+        seller = self._register("ct01_seller", "卖家CT01")
+        p1 = self._publish(seller["username"], "CT01 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["username"], "CT02 商品B", price=80,
+                           category="Skill")
+
+        r = self.client.get(self._compare_url([p1["id"], p2["id"]]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("products", body)
+        products = body["products"]
+        self.assertEqual(len(products), 2)
+        ids = {p["id"] for p in products}
+        self.assertIn(p1["id"], ids)
+        self.assertIn(p2["id"], ids)
+
+    # ---- CT-02 ----
+    def test_compare_four_products(self):
+        """GET /api/v4/compare with 4 product_ids returns data for all 4."""
+        seller = self._register("ct02_seller", "卖家CT02")
+        products = []
+        for i in range(4):
+            p = self._publish(
+                seller["username"], f"CT02 商品{i}", price=50 + i * 10,
+                category="Skill",
+            )
+            products.append(p)
+
+        r = self.client.get(self._compare_url([p["id"] for p in products]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("products", body)
+        self.assertEqual(len(body["products"]), 4)
+
+    # ---- CT-03 ----
+    def test_compare_more_than_four_rejected(self):
+        """GET /api/v4/compare with 5 product_ids returns HTTP 400."""
+        seller = self._register("ct03_seller", "卖家CT03")
+        for i in range(5):
+            self._publish(
+                seller["username"], f"CT03 商品{i}", price=50,
+                category="Skill",
+            )
+
+        r = self.client.get(self._compare_url([1, 2, 3, 4, 5]))
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+
+    # ---- CT-04 ----
+    def test_compare_nonexistent_product(self):
+        """GET /api/v4/compare with a non-existent product_id returns 404."""
+        seller = self._register("ct04_seller", "卖家CT04")
+        real_product = self._publish(seller["username"], "CT04 真实商品",
+                                     price=50, category="Skill")
+
+        # Pass one real product and one non-existent ID
+        r = self.client.get(
+            self._compare_url([real_product["id"], 99999])
+        )
+        # Must be 200 first (endpoint exists), then 404 for bad product_id
+        self.assertEqual(r.status_code, 404, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+
+    # ---- CT-05 ----
+    def test_compare_includes_eval_badge(self):
+        """Each product in the comparison response includes eval_badge
+        when eval_status is 'passed'."""
+        seller = self._register("ct05_seller", "卖家CT05")
+        p1 = self._make_eval_product(
+            seller["username"], "CT05 优秀技能A",
+            eval_score=0.92, eval_status="passed", price=100,
+        )
+        p2 = self._make_eval_product(
+            seller["username"], "CT05 优秀技能B",
+            eval_score=0.85, eval_status="passed", price=80,
+        )
+
+        r = self.client.get(self._compare_url([p1["id"], p2["id"]]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        products = body["products"]
+        self.assertEqual(len(products), 2)
+
+        for prod in products:
+            self.assertIn("eval_badge", prod)
+            badge = prod["eval_badge"]
+            self.assertIsNotNone(badge)
+            self.assertIn("tier", badge)
+            self.assertIn("color", badge)
+            self.assertIn("label", badge)
+            self.assertIn("score_display", badge)
+
+        # Verify badge tier mapping: 0.92 → excellent (A+), 0.85 → good (B+)
+        badges = {p["id"]: p["eval_badge"] for p in products}
+        self.assertEqual(badges[p1["id"]]["tier"], "excellent")
+        self.assertEqual(badges[p1["id"]]["label"], "A+")
+        self.assertEqual(badges[p2["id"]]["tier"], "good")
+        self.assertEqual(badges[p2["id"]]["label"], "B+")
+
+    # ---- CT-06 ----
+    def test_compare_matrix_present(self):
+        """The response includes a comparison_matrix dict with arrays for
+        price, eval_score, sales, and downloads."""
+        seller = self._register("ct06_seller", "卖家CT06")
+        p1 = self._publish(seller["username"], "CT06 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["username"], "CT06 商品B", price=80,
+                           category="Skill")
+
+        r = self.client.get(self._compare_url([p1["id"], p2["id"]]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("comparison_matrix", body)
+        matrix = body["comparison_matrix"]
+        self.assertIsNotNone(matrix)
+        self.assertIn("price", matrix)
+        self.assertIn("eval_score", matrix)
+        self.assertIn("sales", matrix)
+        self.assertIn("downloads", matrix)
+
+        # Verify price array matches product prices in order
+        self.assertEqual(matrix["price"], [100, 80])
+        # Verify lengths match product count
+        for key in ("price", "eval_score", "sales", "downloads"):
+            self.assertEqual(
+                len(matrix[key]), 2,
+                f"Matrix key '{key}' should have 2 entries",
+            )
+
+    # ---- CT-07 ----
+    def test_compare_includes_seller_stats(self):
+        """Each product in the comparison includes sales and downloads
+        from product_analytics."""
+        seller = self._register("ct07_seller", "卖家CT07")
+        p1 = self._publish(seller["username"], "CT07 商品A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["username"], "CT07 商品B", price=80,
+                           category="Skill")
+
+        # Insert analytics data for both products
+        self._seed_analytics(p1["id"], views=200, purchases=30, revenue_cents=3000)
+        self._seed_analytics(p2["id"], views=150, purchases=20, revenue_cents=1600)
+
+        r = self.client.get(self._compare_url([p1["id"], p2["id"]]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        products = body["products"]
+        self.assertEqual(len(products), 2)
+
+        stats = {p["id"]: p for p in products}
+        self.assertEqual(stats[p1["id"]]["sales"], 30)
+        self.assertEqual(stats[p1["id"]]["downloads"], 200)
+        self.assertEqual(stats[p2["id"]]["sales"], 20)
+        self.assertEqual(stats[p2["id"]]["downloads"], 150)
+
+        # Also verify product_analytics table has the records
+        analytics_rows = asyncio.run(_fetchall(
+            "SELECT product_id, views, purchases FROM product_analytics "
+            "WHERE product_id IN (?, ?)",
+            (p1["id"], p2["id"]),
+        ))
+        self.assertEqual(len(analytics_rows), 2)
+
+    # ---- CT-08 ----
+    def test_compare_single_product(self):
+        """GET /api/v4/compare with a single product_id returns that
+        product's data with a valid comparison_matrix."""
+        seller = self._register("ct08_seller", "卖家CT08")
+        p1 = self._publish(seller["username"], "CT08 单品", price=75,
+                           category="Skill")
+
+        r = self.client.get(self._compare_url([p1["id"]]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("products", body)
+        self.assertEqual(len(body["products"]), 1)
+        self.assertEqual(body["products"][0]["id"], p1["id"])
+        self.assertEqual(body["products"][0]["name"], "CT08 单品")
+        self.assertEqual(body["products"][0]["price"], 75)
+
+        # comparison_matrix should still be present with single-element arrays
+        self.assertIn("comparison_matrix", body)
+        matrix = body["comparison_matrix"]
+        self.assertEqual(matrix["price"], [75])
+        self.assertEqual(len(matrix["eval_score"]), 1)
+        self.assertEqual(len(matrix["sales"]), 1)
+        self.assertEqual(len(matrix["downloads"]), 1)

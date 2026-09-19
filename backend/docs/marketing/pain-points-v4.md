@@ -592,19 +592,31 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - Token 输出上限 (512) | | | | |
 | - Cron 清理旧记录 (>30天) | | | | |
 
-### v4.10+ 计划中功能 📋
+### v4.10 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Comparison Tool** | v4.10.0 | ✅ 完成 | 8/8 通过 | pending |
+| - 商品对比页面 (最多4个) | | | | |
+| - 对比维度 (价格/评分/销量/功能) | | | | |
+| - Eval badge 对比 | | | | |
+| - Compare API (GET /api/v4/compare) | | | | |
+
+### v4.11+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
-| Comparison Tool | v4.10.0 | P2 |
-| Mobile/PWA | v4.10.0 | P2 |
-| Bulk Trial (批量试用多个 Skill) | v4.11.0 | P2 |
+| Mobile/PWA | v4.11.0 | P2 |
+| Bulk Trial (批量试用) | v4.12.0 | P2 |
+| Bulk Operations (批量管理) | v4.12.0 | P2 |
 
 ### 迭代统计
 
-- **迭代次数**: 14+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription → v4.8.0 Eval Score Badges → v4.9.0 One-Click Trial Run）
-- **测试覆盖率**: 197/197 (100%)
-- **代码提交**: 12 次
+- **迭代次数**: 15+（v4.0 基线 → v4.1.0 → v4.1.1 → v4.2.0 → v4.3.0 → v4.4.0 → v4.5.0 → v4.5.1 → v4.6.0 → v4.7.0 → v4.8.0 → v4.9.0 → v4.10.0 Comparison Tool）
+- **测试覆盖率**: 205/205 (100%)
+- **代码提交**: 13 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---

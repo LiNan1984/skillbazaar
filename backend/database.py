@@ -3636,6 +3636,25 @@ async def get_traffic_sources(product_id: int, start_date: str, end_date: str) -
         await db.close()
 
 
+async def get_product_analytics_aggregate(product_id: int) -> dict:
+    """Get aggregated analytics (views, purchases) for a single product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT COALESCE(SUM(views), 0) as views,
+                      COALESCE(SUM(purchases), 0) as purchases
+               FROM product_analytics
+               WHERE product_id = ?""",
+            (product_id,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+        return {"views": 0, "purchases": 0}
+    finally:
+        await db.close()
+
+
 async def get_top_products_for_seller(seller_name: str, metric: str, limit: int) -> list[dict]:
     """Get top performing products for a seller by metric."""
     db = await get_db()

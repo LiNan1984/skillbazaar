@@ -1212,3 +1212,41 @@ class CanTrialResponse(BaseModel):
 class TrialCleanupResponse(BaseModel):
     deleted_count: int = 0
     message: str = ""
+
+
+# ===========================================================================
+# v4.10 – Comparison Tool
+# ===========================================================================
+
+
+class CompareProductResponse(BaseModel):
+    id: int
+    name: str
+    price: int
+    seller_name: str
+    eval_score: float | None = None
+    eval_status: str | None = None
+    eval_badge: dict | None = None
+    category: str
+    sales: int = 0
+    downloads: int = 0
+    description: str
+    features: list[str] = []
+    subscription_plans: list[dict] = []
+    created_at: str
+
+
+class CompareResponse(BaseModel):
+    products: list[CompareProductResponse]
+    comparison_matrix: dict | None = None
+
+
+class ComparisonSaveRequest(BaseModel):
+    product_ids: list[int]
+    name: str | None = None
+
+
+class ComparisonSaveResponse(BaseModel):
+    comparison_id: str
+    share_url: str
+    product_ids: list[int]

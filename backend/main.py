@@ -29,6 +29,7 @@ from routers.pricing_v4 import router as pricing_v4_router
 from routers.traffic_boost_v4 import router as traffic_boost_v4_router
 from routers.subscription_v4 import router as subscription_v4_router
 from routers.trial_v4 import router as trial_v4_router
+from routers.compare_v4 import router as compare_v4_router
 
 
 @asynccontextmanager
@@ -85,6 +86,7 @@ app.include_router(pricing_v4_router)
 app.include_router(traffic_boost_v4_router)
 app.include_router(subscription_v4_router)
 app.include_router(trial_v4_router)
+app.include_router(compare_v4_router)
 
 
 @app.get("/")
