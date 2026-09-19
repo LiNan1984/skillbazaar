@@ -25,6 +25,7 @@ async def init_db():
     await seed_default_activity()
     await init_semantic_search()
     await init_trial_runs_table()
+    await init_reviews_table()
 
 
 async def _create_tables(db: aiosqlite.Connection):
@@ -461,6 +462,15 @@ async def _create_tables(db: aiosqlite.Connection):
             content TEXT DEFAULT '',
             created_at TEXT DEFAULT (datetime('now')),
             UNIQUE(product_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS review_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            review_id INTEGER NOT NULL REFERENCES product_reviews(id),
+            user_id TEXT NOT NULL REFERENCES users(id),
+            vote TEXT NOT NULL CHECK(vote IN ('helpful', 'unhelpful')),
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(review_id, user_id)
         );
 
         CREATE TABLE IF NOT EXISTS chat_messages (
@@ -2861,7 +2871,7 @@ async def fetch_product_review(product_id: int, user_id: str) -> dict | None:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT * FROM product_reviews WHERE product_id = ? AND user_id = ?",
+            "SELECT * FROM product_reviews WHERE product_id = ? AND user_id = ? AND status = 'active'",
             (product_id, user_id),
         )
         row = await cursor.fetchone()
@@ -2877,17 +2887,17 @@ async def insert_product_review(data: dict) -> int:
         now = datetime.now().isoformat()
         cursor = await db.execute(
             """
-            INSERT INTO product_reviews (product_id, user_id, order_ref, rating, content, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO product_reviews (product_id, user_id, order_ref, rating, title, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (data["product_id"], data["user_id"], data.get("order_ref"),
-             data["rating"], data.get("content", ""), now),
+             data["rating"], data.get("title"), data.get("content", ""), now),
         )
         review_id = cursor.lastrowid
         await db.execute(
             """
             UPDATE products
-            SET rating = (SELECT ROUND(AVG(rating), 2) FROM product_reviews WHERE product_id = ?)
+            SET rating = (SELECT ROUND(AVG(rating), 2) FROM product_reviews WHERE product_id = ? AND status = 'active')
             WHERE id = ?
             """,
             (data["product_id"], data["product_id"]),
@@ -2902,7 +2912,7 @@ async def fetch_product_reviews(product_id: int, page: int = 1, page_size: int =
     db = await get_db()
     try:
         count_cursor = await db.execute(
-            "SELECT COUNT(*) FROM product_reviews WHERE product_id = ?",
+            "SELECT COUNT(*) FROM product_reviews WHERE product_id = ? AND status = 'active'",
             (product_id,),
         )
         total = (await count_cursor.fetchone())[0]
@@ -2913,7 +2923,7 @@ async def fetch_product_reviews(product_id: int, page: int = 1, page_size: int =
             SELECT r.*, u.nickname, u.avatar
             FROM product_reviews r
             LEFT JOIN users u ON r.user_id = u.id
-            WHERE r.product_id = ?
+            WHERE r.product_id = ? AND r.status = 'active'
             ORDER BY r.created_at DESC, r.id DESC
             LIMIT ? OFFSET ?
             """,
@@ -2930,11 +2940,128 @@ async def fetch_review_summary(product_id: int) -> dict:
     try:
         cursor = await db.execute(
             "SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(rating), 2), 0) AS avg_rating "
-            "FROM product_reviews WHERE product_id = ?",
+            "FROM product_reviews WHERE product_id = ? AND status = 'active'",
             (product_id,),
         )
         row = await cursor.fetchone()
-        return {"total": row[0], "avg_rating": row[1]}
+        total = row[0]
+        avg = row[1]
+
+        # Distribution: count per star rating (1-5)
+        dist_rows = await db.execute(
+            "SELECT rating, COUNT(*) AS cnt FROM product_reviews "
+            "WHERE product_id = ? AND status = 'active' GROUP BY rating",
+            (product_id,),
+        )
+        dist = {str(r[0]): r[1] for r in await dist_rows.fetchall()}
+        # Ensure all ratings 1-5 are present
+        distribution = {str(i): dist.get(str(i), 0) for i in range(1, 6)}
+
+        return {
+            "total": total,                    # backward compat (v1)
+            "avg_rating": avg,                 # backward compat (v1)
+            "total_reviews": total,            # v4.13
+            "average_rating": avg,             # v4.13
+            "distribution": distribution,      # v4.13
+        }
+    finally:
+        await db.close()
+
+
+async def update_product_review(review_id: int, user_id: str, data: dict) -> bool:
+    """Update a review's rating, title, and/or content. Returns True if updated."""
+    db = await get_db()
+    try:
+        # Build dynamic SET clause
+        sets = []
+        params = []
+        if "rating" in data:
+            sets.append("rating = ?")
+            params.append(data["rating"])
+        if "title" in data:
+            sets.append("title = ?")
+            params.append(data["title"])
+        if "content" in data:
+            sets.append("content = ?")
+            params.append(data["content"])
+        if not sets:
+            return False
+
+        cursor = await db.execute(
+            f"UPDATE product_reviews SET {', '.join(sets)} WHERE id = ? AND user_id = ? AND status = 'active'",
+            (*params, review_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def soft_delete_product_review(review_id: int, user_id: str) -> bool:
+    """Soft-delete a review by setting status='inactive'. Returns True if deleted."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE product_reviews SET status = 'inactive' WHERE id = ? AND user_id = ? AND status = 'active'",
+            (review_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def insert_review_vote(review_id: int, user_id: str, vote: str) -> bool:
+    """Insert or update a vote for a review. Returns True if successful."""
+    db = await get_db()
+    try:
+        # Upsert: insert or update existing vote
+        await db.execute(
+            """
+            INSERT INTO review_votes (review_id, user_id, vote, created_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(review_id, user_id) DO UPDATE SET vote = excluded.vote
+            """,
+            (review_id, user_id, vote),
+        )
+        await db.commit()
+        return True
+    finally:
+        await db.close()
+
+
+async def get_review_helpful_count(review_id: int) -> dict:
+    """Get helpful/unhelpful vote counts for a review."""
+    db = await get_db()
+    try:
+        rows = await db.execute(
+            "SELECT vote, COUNT(*) AS cnt FROM review_votes WHERE review_id = ? GROUP BY vote",
+            (review_id,),
+        )
+        counts = {"helpful": 0, "unhelpful": 0}
+        for row in await rows.fetchall():
+            counts[row[0]] = row[1]
+        return counts
+    finally:
+        await db.close()
+
+
+async def update_product_rating(product_id: int) -> None:
+    """Recompute and update the product's average rating from active reviews."""
+    db = await get_db()
+    try:
+        await db.execute(
+            """
+            UPDATE products
+            SET rating = COALESCE(
+                (SELECT ROUND(AVG(rating), 2) FROM product_reviews WHERE product_id = ? AND status = 'active'),
+                4.0
+            )
+            WHERE id = ?
+            """,
+            (product_id, product_id),
+        )
+        await db.commit()
     finally:
         await db.close()
 
@@ -4771,6 +4898,27 @@ async def add_subscription_columns_to_products():
             pass
         try:
             await db.execute("ALTER TABLE products ADD COLUMN is_subscription INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def init_reviews_table():
+    """Add review columns (title, status) to product_reviews table if they don't exist."""
+    db = await get_db()
+    try:
+        try:
+            await db.execute("ALTER TABLE product_reviews ADD COLUMN title TEXT")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE product_reviews ADD COLUMN status TEXT DEFAULT 'active'")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE product_reviews ADD COLUMN helpful_count INTEGER DEFAULT 0")
         except Exception:
             pass
         await db.commit()

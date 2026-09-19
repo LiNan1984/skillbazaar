@@ -31,6 +31,7 @@ from routers.subscription_v4 import router as subscription_v4_router
 from routers.trial_v4 import router as trial_v4_router
 from routers.bulk_trial_v4 import router as bulk_trial_v4_router
 from routers.compare_v4 import router as compare_v4_router
+from routers.reviews_v4 import router as reviews_v4_router
 from routers.bulk_operations_v4 import router as bulk_operations_v4_router
 
 
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
     await database.create_subscription_table()
     await database.create_subscription_events_table()
     await database.add_subscription_columns_to_products()
+    # Initialize review tables
+    await database.init_reviews_table()
     yield
 
 
@@ -90,6 +93,7 @@ app.include_router(subscription_v4_router)
 app.include_router(trial_v4_router)
 app.include_router(bulk_trial_v4_router)
 app.include_router(compare_v4_router)
+app.include_router(reviews_v4_router)
 app.include_router(bulk_operations_v4_router)
 
 

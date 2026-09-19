@@ -195,7 +195,46 @@ class TransactionResponse(BaseModel):
 
 class ReviewCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5, strict=True)
+    title: Optional[str] = Field(None, max_length=100)
     content: str = Field("", max_length=500)
+
+
+class ReviewUpdate(BaseModel):
+    rating: Optional[int] = Field(None, ge=1, le=5, strict=True)
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+
+class ReviewResponse(BaseModel):
+    id: int
+    product_id: int
+    product_name: Optional[str] = None
+    user_id: str
+    user_nickname: str
+    user_avatar: Optional[str] = None
+    rating: int
+    title: Optional[str] = None
+    content: str
+    helpful_count: int = 0
+    created_at: Optional[str] = None
+
+
+class ReviewVoteRequest(BaseModel):
+    vote: str  # "helpful" | "unhelpful"
+
+
+class ReviewSummaryResponse(BaseModel):
+    product_id: int
+    average_rating: float
+    total_reviews: int
+    distribution: dict
+
+
+class ReviewListResponse(BaseModel):
+    reviews: list[ReviewResponse]
+    total: int
+    page: int
+    limit: int
 
 
 # ---------- Chat Models ----------

@@ -97,6 +97,7 @@ class _V4Base(unittest.TestCase):
                             "affiliate_clicks", "affiliate_links",
                             "subscriptions", "subscription_events",
                             "trial_runs", "bulk_operations",
+                            "reviews", "review_votes",
                             "products", "product_embeddings"):
                     try:
                         await conn.execute(f"DELETE FROM {tbl}")
@@ -3920,3 +3921,440 @@ class TestBulkOperations(_V4Base):
         return asyncio.run(_fetchone(
             "SELECT * FROM products WHERE id = ?", (product_id,),
         ))
+
+
+# ===========================================================================
+# v4.13 – Skill Reviews & Ratings  (RV-01 … RV-10)
+# ===========================================================================
+
+class TestReviews(_V4Base):
+    """Reviews and ratings for purchased products."""
+
+    # ---- RV-01 ----
+    def test_create_review_as_verified_purchaser(self):
+        """Verified purchaser can create a review with rating, title, and content."""
+        seller = self._register("rv01_seller", "卖家RV01")
+        product = self._publish(seller["username"], "RV01 商品", price=50,
+                                category="Skill")
+        buyer = self._register("rv01_buyer", "买家RV01")
+
+        # Purchase the product first
+        self._buy(buyer, product["id"])
+
+        # Create review
+        r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "非常实用的 Skill",
+                "content": "用了两周，提升了我的工作效率。强烈推荐！",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        review = r.json()
+        self.assertEqual(review["product_id"], product["id"])
+        self.assertEqual(review["user_id"], buyer["id"])
+        self.assertEqual(review["rating"], 5)
+        self.assertEqual(review["title"], "非常实用的 Skill")
+        self.assertEqual(review["content"], "用了两周，提升了我的工作效率。强烈推荐！")
+        self.assertTrue(review["is_verified_purchase"])
+        self.assertEqual(review["helpful_count"], 0)
+        self.assertEqual(review["unhelpful_count"], 0)
+        self.assertFalse(review["is_edited"])
+        self.assertIn("created_at", review)
+        self.assertIn("updated_at", review)
+
+        # Verify in DB
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM reviews WHERE product_id = ? AND user_id = ?",
+            (product["id"], buyer["id"]),
+        ))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["rating"], 5)
+        self.assertEqual(rows[0]["is_verified_purchase"], 1)
+
+    # ---- RV-02 ----
+    def test_cannot_review_without_purchase(self):
+        """Non-purchaser gets 403 when trying to create a review."""
+        seller = self._register("rv02_seller", "卖家RV02")
+        product = self._publish(seller["username"], "RV02 商品", price=50,
+                                category="Skill")
+        non_buyer = self._register("rv02_nonbuyer", "非买家RV02")
+
+        r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 4,
+                "title": "没买过的评价",
+                "content": "我没买但想评价",
+            },
+            headers=_auth(non_buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 403, r.text)
+
+        # Verify no review was created
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM reviews WHERE product_id = ?", (product["id"],),
+        ))
+        self.assertEqual(len(rows), 0)
+
+    # ---- RV-03 ----
+    def test_one_review_per_user_per_product(self):
+        """Duplicate review for the same product returns 409."""
+        seller = self._register("rv03_seller", "卖家RV03")
+        product = self._publish(seller["username"], "RV03 商品", price=50,
+                                category="Skill")
+        buyer = self._register("rv03_buyer", "买家RV03")
+
+        # Purchase and create first review
+        self._buy(buyer, product["id"])
+        r1 = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "第一条评价",
+                "content": "好评",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r1.status_code, 201, r1.text)
+
+        # Try to create duplicate review
+        r2 = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 3,
+                "title": "第二条评价",
+                "content": "中评",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r2.status_code, 409, r2.text)
+
+        # Verify only one review exists
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM reviews WHERE product_id = ? AND user_id = ?",
+            (product["id"], buyer["id"]),
+        ))
+        self.assertEqual(len(rows), 1)
+
+    # ---- RV-04 ----
+    def test_update_own_review(self):
+        """User can update their own review; is_edited is set to true."""
+        seller = self._register("rv04_seller", "卖家RV04")
+        product = self._publish(seller["username"], "RV04 商品", price=50,
+                                category="Skill")
+        buyer = self._register("rv04_buyer", "买家RV04")
+
+        # Purchase and create review
+        self._buy(buyer, product["id"])
+        create_r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "原标题",
+                "content": "原始内容",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201, create_r.text)
+        review_id = create_r.json()["id"]
+
+        # Update review
+        r = self.client.put(
+            f"/api/v4/reviews/{review_id}",
+            json={
+                "rating": 4,
+                "title": "更新后的标题",
+                "content": "使用一段时间后的更新内容",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        updated = r.json()
+        self.assertEqual(updated["rating"], 4)
+        self.assertEqual(updated["title"], "更新后的标题")
+        self.assertEqual(updated["content"], "使用一段时间后的更新内容")
+        self.assertTrue(updated["is_edited"])
+
+    # ---- RV-05 ----
+    def test_delete_own_review(self):
+        """User can permanently delete their own review."""
+        seller = self._register("rv05_seller", "卖家RV05")
+        product = self._publish(seller["username"], "RV05 商品", price=50,
+                                category="Skill")
+        buyer = self._register("rv05_buyer", "买家RV05")
+
+        # Purchase and create review
+        self._buy(buyer, product["id"])
+        create_r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "待删除评价",
+                "content": "这条评价将被删除",
+            },
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201, create_r.text)
+        review_id = create_r.json()["id"]
+
+        # Delete review
+        r = self.client.delete(
+            f"/api/v4/reviews/{review_id}",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 204, r.text)
+
+        # Verify review is removed from DB (permanent delete)
+        rows = asyncio.run(_fetchall(
+            "SELECT * FROM reviews WHERE id = ?", (review_id,),
+        ))
+        self.assertEqual(len(rows), 0)
+
+    # ---- RV-06 ----
+    def test_list_product_reviews_with_pagination(self):
+        """GET product reviews returns paginated list sorted by helpful."""
+        seller = self._register("rv06_seller", "卖家RV06")
+        product = self._publish(seller["username"], "RV06 商品", price=50,
+                                category="Skill")
+
+        # Create 3 buyers, each purchases and reviews
+        for i in range(3):
+            b = self._register(f"rv06_buyer{i}", f"买家RV06-{i}")
+            self._buy(b, product["id"])
+            self.client.post(
+                "/api/v4/reviews",
+                json={
+                    "product_id": product["id"],
+                    "rating": 5 - i,
+                    "title": f"RV06 评价{i+1}",
+                    "content": f"评价内容{i+1}",
+                },
+                headers=_auth(b["token"]),
+            )
+
+        # List reviews (public endpoint, no auth needed)
+        r = self.client.get(
+            f"/api/v4/products/{product['id']}/reviews?page=1&limit=10",
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("reviews", body)
+        self.assertIn("total", body)
+        self.assertIn("page", body)
+        self.assertIn("limit", body)
+        self.assertIn("total_pages", body)
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["page"], 1)
+        self.assertEqual(body["limit"], 10)
+        self.assertEqual(body["total_pages"], 1)
+        self.assertEqual(len(body["reviews"]), 3)
+
+    # ---- RV-07 ----
+    def test_review_helpful_voting(self):
+        """Users can vote helpful/unhelpful on reviews; counts update on toggle."""
+        seller = self._register("rv07_seller", "卖家RV07")
+        product = self._publish(seller["username"], "RV07 商品", price=50,
+                                category="Skill")
+        reviewer = self._register("rv07_reviewer", "评价者RV07")
+        voter = self._register("rv07_voter", "投票者RV07")
+
+        # Reviewer purchases and creates review
+        self._buy(reviewer, product["id"])
+        create_r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "RV07 评价",
+                "content": "评价内容",
+            },
+            headers=_auth(reviewer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201, create_r.text)
+        review_id = create_r.json()["id"]
+
+        # Vote helpful
+        r1 = self.client.post(
+            f"/api/v4/reviews/{review_id}/helpful",
+            json={"vote": "helpful"},
+            headers=_auth(voter["token"]),
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+        vote1 = r1.json()
+        self.assertEqual(vote1["helpful_count"], 1)
+        self.assertEqual(vote1["unhelpful_count"], 0)
+        self.assertEqual(vote1["user_vote"], "helpful")
+
+        # Toggle to unhelpful
+        r2 = self.client.post(
+            f"/api/v4/reviews/{review_id}/helpful",
+            json={"vote": "unhelpful"},
+            headers=_auth(voter["token"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        vote2 = r2.json()
+        self.assertEqual(vote2["helpful_count"], 0)
+        self.assertEqual(vote2["unhelpful_count"], 1)
+        self.assertEqual(vote2["user_vote"], "unhelpful")
+
+    # ---- RV-08 ----
+    def test_cannot_vote_twice_same_review(self):
+        """User cannot submit the same vote type twice on the same review."""
+        seller = self._register("rv08_seller", "卖家RV08")
+        product = self._publish(seller["username"], "RV08 商品", price=50,
+                                category="Skill")
+        reviewer = self._register("rv08_reviewer", "评价者RV08")
+        voter = self._register("rv08_voter", "投票者RV08")
+
+        # Reviewer purchases and creates review
+        self._buy(reviewer, product["id"])
+        create_r = self.client.post(
+            "/api/v4/reviews",
+            json={
+                "product_id": product["id"],
+                "rating": 5,
+                "title": "RV08 评价",
+                "content": "评价内容",
+            },
+            headers=_auth(reviewer["token"]),
+        )
+        self.assertEqual(create_r.status_code, 201, create_r.text)
+        review_id = create_r.json()["id"]
+
+        # First helpful vote
+        r1 = self.client.post(
+            f"/api/v4/reviews/{review_id}/helpful",
+            json={"vote": "helpful"},
+            headers=_auth(voter["token"]),
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+
+        # Try to vote helpful again (same vote type) — should be rejected
+        r2 = self.client.post(
+            f"/api/v4/reviews/{review_id}/helpful",
+            json={"vote": "helpful"},
+            headers=_auth(voter["token"]),
+        )
+        self.assertEqual(r2.status_code, 400, r2.text)
+
+    # ---- RV-09 ----
+    def test_review_summary_aggregates(self):
+        """Review summary returns correct avg rating, distribution, and recent reviews."""
+        seller = self._register("rv09_seller", "卖家RV09")
+        product = self._publish(seller["username"], "RV09 商品", price=50,
+                                category="Skill")
+
+        # Create 5 reviews with ratings 5, 4, 3, 4, 5
+        # Expected avg: (5+4+3+4+5)/5 = 4.2
+        ratings = [5, 4, 3, 4, 5]
+        for i, rating in enumerate(ratings):
+            buyer = self._register(f"rv09_buyer{i}", f"买家RV09-{i}")
+            self._buy(buyer, product["id"])
+            self.client.post(
+                "/api/v4/reviews",
+                json={
+                    "product_id": product["id"],
+                    "rating": rating,
+                    "title": f"RV09 评价{i+1}",
+                    "content": f"评价内容{i+1}",
+                },
+                headers=_auth(buyer["token"]),
+            )
+
+        # Get summary
+        r = self.client.get(
+            f"/api/v4/products/{product['id']}/review-summary",
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        summary = r.json()
+        self.assertEqual(summary["product_id"], product["id"])
+        self.assertEqual(summary["avg_rating"], 4.2)
+        self.assertEqual(summary["review_count"], 5)
+
+        # Distribution: 5->2, 4->2, 3->1, 2->0, 1->0
+        dist = summary["rating_distribution"]
+        self.assertEqual(dist["5"], 2)
+        self.assertEqual(dist["4"], 2)
+        self.assertEqual(dist["3"], 1)
+        self.assertEqual(dist["2"], 0)
+        self.assertEqual(dist["1"], 0)
+
+        # Distribution sum should equal review_count
+        self.assertEqual(sum(dist.values()), 5)
+
+        # Recent reviews should have up to 3 entries with summary fields
+        self.assertLessEqual(len(summary["recent_reviews"]), 3)
+        for rr in summary["recent_reviews"]:
+            self.assertIn("id", rr)
+            self.assertIn("username", rr)
+            self.assertIn("rating", rr)
+            self.assertIn("title", rr)
+            self.assertIn("created_at", rr)
+
+    # ---- RV-10 ----
+    def test_my_reviews_lists_all_user_reviews(self):
+        """My reviews endpoint returns all reviews by the authenticated user."""
+        seller = self._register("rv10_seller", "卖家RV10")
+        products = []
+        for i in range(3):
+            p = self._publish(seller["username"], f"RV10 商品{i+1}", price=50,
+                              category="Skill")
+            products.append(p)
+
+        buyer = self._register("rv10_buyer", "买家RV10")
+
+        # Purchase all products and create reviews
+        for i, prod in enumerate(products):
+            self._buy(buyer, prod["id"])
+            self.client.post(
+                "/api/v4/reviews",
+                json={
+                    "product_id": prod["id"],
+                    "rating": 5 - i,
+                    "title": f"RV10 评价{i+1}",
+                    "content": f"评价内容{i+1}",
+                },
+                headers=_auth(buyer["token"]),
+            )
+
+        # Get my reviews
+        r = self.client.get(
+            "/api/v4/reviews/my?page=1&limit=20",
+            headers=_auth(buyer["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("reviews", body)
+        self.assertIn("total", body)
+        self.assertIn("page", body)
+        self.assertIn("limit", body)
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(len(body["reviews"]), 3)
+
+        # Verify product info is included
+        product_ids = {rev["product_id"] for rev in body["reviews"]}
+        for prod in products:
+            self.assertIn(prod["id"], product_ids)
+
+        # Verify each review has expected fields
+        for rev in body["reviews"]:
+            self.assertIn("id", rev)
+            self.assertIn("product_id", rev)
+            self.assertIn("product_name", rev)
+            self.assertIn("rating", rev)
+            self.assertIn("title", rev)
+            self.assertIn("is_verified_purchase", rev)
+            self.assertTrue(rev["is_verified_purchase"])
+
+
+if __name__ == "__main__":
+    unittest.main()
