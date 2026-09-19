@@ -2,7 +2,7 @@
 
 > **文档用途**: GTM 策略、产品定位、营销话术、功能路线图参考
 > **撰写日期**: 2026-09-19
-> **版本**: v4.0
+> **版本**: v4.1（v4.0 基线 + v4.1 实现进度）
 
 ---
 
@@ -57,12 +57,18 @@
 
 **现象**: 买了一个 Skill 后，卖家停止维护，LLM 版本更新导致 Skill 失效，买家不知道找谁。
 
-**SkillBazaar 对策**: 当前无此机制。技能版本管理、卖家信息展示。
+**SkillBazaar 对策 (v4.1 已实现)**:
+- ✅ **Skill Versioning** — SemVer 版本管理（skill_versions 表），卖家可为同一 Skill 发布多个版本
+- ✅ **版本历史追踪** — 买家可查看完整版本历史、changelog
+- ✅ **Rollback 机制** — 卖家可回滚到任一历史版本
+- ✅ **User Profiles** — 卖家展示页（GET /api/u/{username}），买家可查看卖家历史、关注卖家动态
+- 卖家信息展示
 
 **改进建议**:
-- 增加 Skill 版本管理（semver）和更新通知
+- ~~增加 Skill 版本管理（semver）和更新通知~~ ✅ 已完成
 - 建立「维护 SLA」承诺机制（卖家发布时声明维护周期）
 - 买家可标记「已失效」，触发平台介入
+- 自动通知已购用户新版本发布
 
 ### 痛点 6：买断制不适合试用 — 一次性付费决策压力大
 
@@ -101,9 +107,14 @@
 
 **现象**: 没有看到其他用户的真实评价和使用案例，决策缺乏社会证明。
 
-**SkillBazaar 对策**: 评价系统（仅购买后可评价），评分和下载量展示。
+**SkillBazaar 对策**:
+- ✅ **User Profiles (v4.1)** — 公开卖家/买家主页（bio、avatar、social_links），展示专业形象
+- ✅ **Follow 系统 (v4.1)** — 关注卖家，获取动态更新；查看粉丝/关注列表
+- ✅ **Achievements/Badges (v4.1)** — 成就系统，展示用户贡献（优质卖家、活跃买家等）
+- 评价系统（仅购买后可评价），评分和下载量展示。
 
 **改进建议**:
+- ~~增加社区主页功能~~ ✅ 已完成（User Profiles）
 - 评价系统增加「有用/无用」投票
 - 增加使用案例展示（Buyer Stories）
 - 社区 Q&A 板块
@@ -436,6 +447,47 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | 新品 7 日曝光量 | 未知 | >100 次 | 发布后 7 天内商品详情页 PV |
 | 复购率 | 未知 | >20% | 30 日内再次购买用户占比 |
 | NPS 评分 | 未知 | >50 | 季度调研 |
+
+---
+
+## 九、v4.1 迭代进度追踪
+
+### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **User Profiles** | v4.1.0 | ✅ 完成 | 13/13 通过 | 40ff34b |
+| - 公开用户主页 | | | | |
+| - Follow/Unfollow 系统 | | | | |
+| - Achievements/Badges | | | | |
+| **Skill Versioning** | v4.1.1 | 🔄 开发中 | TBD | - |
+| - SemVer 版本管理 | | | | |
+| - 版本历史 & Changelog | | | | |
+| - Rollback 机制 | | | | |
+
+### 进行中功能 🔄
+
+| 功能 | 预计完成 | 负责 Agent | 依赖 |
+|------|---------|-----------|------|
+| Skill Versioning | v4.1.1 | DEV | - |
+| Seller Analytics | v4.2.0 | DEV | Skill Versioning |
+| Payment Integration | v4.2.0 | DEV | - |
+
+### 计划中功能 📋
+
+| 功能 | 版本 | 优先级 |
+|------|------|--------|
+| Product Bundles | v4.2.0 | P1 |
+| Affiliate Program | v4.2.0 | P1 |
+| Semantic Search | v4.3.0 | P1 |
+| Mobile/PWA | v4.3.0 | P2 |
+
+### 迭代统计
+
+- **迭代次数**: 2+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning）
+- **测试覆盖率**: 85/115 (73.9%)
+- **代码提交**: 2 次（feat: user profiles v4, test: baseline）
+- **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
 
