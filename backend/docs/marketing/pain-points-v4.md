@@ -2,7 +2,7 @@
 
 > **文档用途**: GTM 策略、产品定位、营销话术、功能路线图参考
 > **撰写日期**: 2026-09-19
-> **版本**: v4.2（v4.0 基线 + v4.1 + v4.2 实现进度）
+> **版本**: v4.4（v4.0 基线 + v4.1 + v4.2 + v4.3 + v4.4 实现进度）
 
 ---
 
@@ -451,9 +451,11 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ---
 
-## 九、v4.1 迭代进度追踪
+## 九、v4 迭代进度追踪
 
-### 已实现功能 ✅
+### v4.1 迭代进度追踪
+
+#### 已实现功能 ✅
 
 | 功能 | 版本 | 状态 | 测试 | 提交 |
 |------|------|------|------|------|
@@ -467,30 +469,77 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - Rollback 机制 | | | | |
 | - 自动创建 v1.0.0 | | | | |
 
-### 进行中功能 🔄
+### v4.2 迭代进度追踪
 
-| 功能 | 预计完成 | 负责 Agent | 依赖 |
-|------|---------|-----------|------|
-| Skill Versioning | v4.1.1 | ✅ 完成 | 12/12 通过 | 5e0abfd |
-| Seller Analytics | v4.2.0 | ✅ 完成 | 7/7 通过 | 17d3132 |
-| - 销售数据看板（总览/产品/导出） | | | | |
-| Payment Integration | v4.2.0 | ✅ 完成 | 9/9 通过 | c9b4ba4 |
-| - 支付订单、回调、提现、历史、支付方式管理 | | | | |
+#### 已实现功能 ✅
 
-### 计划中功能 📋
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **User Agents** | v4.2.0 | ✅ 完成 | 6/6 通过 | 205e7f7 |
+| - 创建/管理 Agent | | | | |
+| - Agent-Skill 关联 | | | | |
+| **Analytics Dashboard** | v4.2.0 | ✅ 完成 | 7/7 通过 | 17d3132 |
+| - 产品分析（浏览/购买/收入） | | | | |
+| - 分类分析 | | | | |
+| - 平台概览 | | | | |
+| **Advanced Search** | v4.2.0 | ✅ 完成 | 7/7 通过 | 205e7f7 |
+| - 多条件筛选 | | | | |
+| - 全文搜索 | | | | |
+| - 保存搜索 | | | | |
+| **Skill Bundles** | v4.2.0 | ✅ 完成 | 7/7 通过 | 205e7f7 |
+| - 创建 Bundle | | | | |
+| - Bundle 折扣 | | | | |
+| - Bundle 购买 | | | | |
+| **Payment Integration** | v4.2.0 | ✅ 完成 | 9/9 通过 | c9b4ba4 |
+| - 支付订单 | | | | |
+| - 支付回调 | | | | |
+| - 提现 | | | | |
+| - 支付历史 | | | | |
+
+### v4.3 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Wishlist** | v4.3.0 | ✅ 完成 | 4/4 通过 | 3bcac63 |
+| - 添加/移除愿望单 | | | | |
+| - 查看愿望单列表 | | | | |
+| - 检查是否已收藏 | | | | |
+| **Recommendations** | v4.3.0 | ✅ 完成 | 3/3 通过 | 3bcac63 |
+| - 相似商品推荐 | | | | |
+| - 经常一起购买 | | | | |
+| - 公开访问（无需登录） | | | | |
+
+### v4.4 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Affiliate Program** | v4.4.0 | ✅ 完成 | 5/5 通过 | deaf54b |
+| - 生成推广链接 | | | | |
+| - 点击追踪 | | | | |
+| - Cookie 追踪转化 | | | | |
+| - 佣金统计 | | | | |
+| - 仅卖家可生成链接 | | | | |
+
+### v4.5+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
-| Product Bundles | v4.2.0 | P1 |
-| Affiliate Program | v4.2.0 | P1 |
-| Semantic Search | v4.3.0 | P1 |
-| Mobile/PWA | v4.3.0 | P2 |
+| Semantic Search | v4.5.0 | P1 |
+| Smart Pricing Suggestions | v4.5.0 | P1 |
+| New Product Traffic Boost | v4.6.0 | P1 |
+| Skill Subscription | v4.6.0 | P2 |
+| Comparison Tool | v4.6.0 | P2 |
+| Mobile/PWA | v4.7.0 | P2 |
 
 ### 迭代统计
 
-- **迭代次数**: 5+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Seller Analytics → v4.2.0 Payment Integration）
-- **测试覆盖率**: 113/137 (82.5%)
-- **代码提交**: 6 次（feat: user profiles v4, feat: skill versioning v4, feat: seller analytics v4, feat: payment integration, test: analytics, test: payment integration）
+- **迭代次数**: 10+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program）
+- **测试覆盖率**: 149/149 (100%)
+- **代码提交**: 7 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
