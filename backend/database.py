@@ -428,6 +428,22 @@ async def _create_tables(db: aiosqlite.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS user_follows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            follower_id TEXT NOT NULL REFERENCES users(id),
+            following_id TEXT NOT NULL REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(follower_id, following_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            badge TEXT NOT NULL,
+            awarded_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, badge)
+        );
+
         CREATE TABLE IF NOT EXISTS sandbox_sessions (
             sandbox_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id),
@@ -854,6 +870,22 @@ async def _seed_products(db: aiosqlite.Connection):
     count = row[0]
     if count > 0:
         return
+
+    # v4: extend user_profiles with display_name, location, website_url, avatar_url, social_links, badges, verified
+    profile_migrations = [
+        "ALTER TABLE user_profiles ADD COLUMN display_name TEXT",
+        "ALTER TABLE user_profiles ADD COLUMN location TEXT",
+        "ALTER TABLE user_profiles ADD COLUMN website_url TEXT",
+        "ALTER TABLE user_profiles ADD COLUMN avatar_url TEXT",
+        "ALTER TABLE user_profiles ADD COLUMN social_links TEXT DEFAULT '[]'",
+        "ALTER TABLE user_profiles ADD COLUMN badges TEXT DEFAULT '[]'",
+        "ALTER TABLE user_profiles ADD COLUMN verified INTEGER DEFAULT 0",
+    ]
+    for migration in profile_migrations:
+        try:
+            await db.execute(migration)
+        except Exception:
+            pass
 
     products = _build_seed_products()
 
@@ -2829,5 +2861,273 @@ async def fetch_products_by_runtime(runtime: str, page: int = 1, page_size: int 
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows], total
+    finally:
+        await db.close()
+
+
+# ---------- User Profiles v4 Helpers ----------
+
+
+async def get_or_create_user_profile(user_id: str, username: str) -> dict:
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+        # Create with defaults
+        now = datetime.now().isoformat()
+        await db.execute(
+            """INSERT INTO user_profiles (user_id, industry, interests, latitude, longitude,
+               city, language, bio, preferred_categories, preferred_price_range,
+               total_spent, total_earned, total_purchases, total_sales,
+               last_active_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, "", "[]", None, None, "", "zh", "", "[]", "[]",
+             0, 0, 0, 0, now, now, now),
+        )
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return dict(row)
+    finally:
+        await db.close()
+
+
+async def get_public_profile(username: str, viewer_id: str | None = None) -> dict | None:
+    db = await get_db()
+    try:
+        # Look up user by username
+        cursor = await db.execute("SELECT id, username, nickname, avatar, role FROM users WHERE username = ?", (username,))
+        user_row = await cursor.fetchone()
+        if not user_row:
+            return None
+        user = dict(user_row)
+
+        # Get profile
+        cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user["id"],))
+        profile_row = await cursor.fetchone()
+        if not profile_row:
+            # Create default profile
+            await get_or_create_user_profile(user["id"], user["username"])
+            cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user["id"],))
+            profile_row = await cursor.fetchone()
+        profile = dict(profile_row)
+
+        # Check if viewer is following
+        is_following = False
+        if viewer_id and viewer_id != user["id"]:
+            cursor = await db.execute(
+                "SELECT id FROM user_follows WHERE follower_id = ? AND following_id = ?",
+                (viewer_id, user["id"]),
+            )
+            is_following = (await cursor.fetchone()) is not None
+
+        # Build public profile dict
+        public = {
+            "id": user["id"],
+            "username": user["username"],
+            "nickname": user["nickname"],
+            "avatar": user["avatar"],
+            "role": user["role"],
+            "display_name": profile.get("display_name") or user["nickname"],
+            "bio": profile.get("bio", ""),
+            "location": profile.get("location"),
+            "website_url": profile.get("website_url"),
+            "avatar_url": profile.get("avatar_url"),
+            "social_links": json.loads(profile["social_links"]) if profile.get("social_links") else [],
+            "badges": json.loads(profile["badges"]) if profile.get("badges") else [],
+            "verified": bool(profile.get("verified", 0)),
+            "industry": profile.get("industry"),
+            "interests": json.loads(profile["interests"]) if profile.get("interests") else [],
+            "city": profile.get("city"),
+            "followers_count": await _get_followers_count(db, user["id"]),
+            "following_count": await _get_following_count(db, user["id"]),
+            "is_following": is_following,
+        }
+        return public
+    finally:
+        await db.close()
+
+
+async def update_user_profile_extended(user_id: str, data: dict) -> dict:
+    db = await get_db()
+    try:
+        # Ensure profile exists
+        await get_or_create_user_profile(user_id, "")
+
+        # Build SET clause dynamically
+        allowed = ["display_name", "location", "website_url", "avatar_url", "social_links", "bio", "industry", "interests", "city", "language"]
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if not updates:
+            return {}
+
+        # JSON serialize list/dict fields
+        for field in ["social_links", "interests"]:
+            if field in updates and isinstance(updates[field], (list, dict)):
+                updates[field] = json.dumps(updates[field], ensure_ascii=False)
+
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values())
+        values.append(datetime.now().isoformat())
+        values.append(user_id)
+
+        await db.execute(
+            f"UPDATE user_profiles SET {set_clause}, updated_at = ? WHERE user_id = ?",
+            values,
+        )
+        await db.commit()
+
+        cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else {}
+    finally:
+        await db.close()
+
+
+async def follow_user(follower_id: str, following_id: str) -> bool:
+    db = await get_db()
+    try:
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT OR IGNORE INTO user_follows (follower_id, following_id, created_at) VALUES (?, ?, ?)",
+            (follower_id, following_id, now),
+        )
+        await db.commit()
+        return True
+    finally:
+        await db.close()
+
+
+async def unfollow_user(follower_id: str, following_id: str) -> bool:
+    db = await get_db()
+    try:
+        await db.execute(
+            "DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?",
+            (follower_id, following_id),
+        )
+        await db.commit()
+        return True
+    finally:
+        await db.close()
+
+
+async def get_followers(user_id: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT uf.id, uf.follower_id, u.username, u.nickname, u.avatar, uf.created_at
+               FROM user_follows uf
+               JOIN users u ON uf.follower_id = u.id
+               WHERE uf.following_id = ?
+               ORDER BY uf.created_at DESC
+               LIMIT ? OFFSET ?""",
+            (user_id, page_size, (page - 1) * page_size),
+        )
+        rows = await cursor.fetchall()
+
+        count_cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM user_follows WHERE following_id = ?",
+            (user_id,),
+        )
+        count_row = await count_cursor.fetchone()
+        total = count_row["cnt"] if count_row else 0
+
+        return [dict(r) for r in rows], total
+    finally:
+        await db.close()
+
+
+async def get_following(user_id: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT uf.id, uf.following_id, u.username, u.nickname, u.avatar, uf.created_at
+               FROM user_follows uf
+               JOIN users u ON uf.following_id = u.id
+               WHERE uf.follower_id = ?
+               ORDER BY uf.created_at DESC
+               LIMIT ? OFFSET ?""",
+            (user_id, page_size, (page - 1) * page_size),
+        )
+        rows = await cursor.fetchall()
+
+        count_cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM user_follows WHERE follower_id = ?",
+            (user_id,),
+        )
+        count_row = await count_cursor.fetchone()
+        total = count_row["cnt"] if count_row else 0
+
+        return [dict(r) for r in rows], total
+    finally:
+        await db.close()
+
+
+async def check_following(follower_id: str, following_id: str) -> bool:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM user_follows WHERE follower_id = ? AND following_id = ?",
+            (follower_id, following_id),
+        )
+        return (await cursor.fetchone()) is not None
+    finally:
+        await db.close()
+
+
+async def _get_followers_count(db: aiosqlite.Connection, user_id: str) -> int:
+    cursor = await db.execute(
+        "SELECT COUNT(*) as cnt FROM user_follows WHERE following_id = ?",
+        (user_id,),
+    )
+    row = await cursor.fetchone()
+    return row["cnt"] if row else 0
+
+
+async def _get_following_count(db: aiosqlite.Connection, user_id: str) -> int:
+    cursor = await db.execute(
+        "SELECT COUNT(*) as cnt FROM user_follows WHERE follower_id = ?",
+        (user_id,),
+    )
+    row = await cursor.fetchone()
+    return row["cnt"] if row else 0
+
+
+async def get_user_products(user_id: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM products WHERE seller_name = (SELECT nickname FROM users WHERE id = ?) AND status = 'active'",
+            (user_id,),
+        )
+        count_row = await cursor.fetchone()
+        total = count_row["cnt"] if count_row else 0
+
+        offset = (page - 1) * page_size
+        cursor = await db.execute(
+            """SELECT id, name, description, category, sub_category, price, original_price,
+                      seller_name, seller_avatar, rating, downloads, sales, tags,
+                      source_platform, github_url, icon, content_preview, status, created_at
+               FROM products
+               WHERE seller_name = (SELECT nickname FROM users WHERE id = ?) AND status = 'active'
+               ORDER BY id DESC LIMIT ? OFFSET ?""",
+            (user_id, page_size, offset),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows], total
+    finally:
+        await db.close()
+
+
+async def add_user_achievement(user_id: str, badge: str) -> bool:
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO user_achievements (user_id, badge) VALUES (?, ?)",
+            (user_id, badge),
+        )
+        await db.commit()
+        return True
     finally:
         await db.close()

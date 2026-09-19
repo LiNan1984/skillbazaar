@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TrendingUp, Clock, ArrowUpCircle, ArrowDownCircle, Star } from 'lucide-react'
-import HeroBanner from '../components/HeroBanner'
+import HeroBanner, { HeroAdvantages } from '../components/HeroBanner'
 import CategoryTabs from '../components/CategoryTabs'
 import ProductCard from '../components/ProductCard'
 import { getProducts } from '../services/api'
@@ -31,6 +31,7 @@ function ProductSkeleton() {
 }
 
 export default function HomePage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -87,6 +88,12 @@ export default function HomePage() {
       <CategoryTabs />
 
       <div className="home-page">
+        <div className="catalog-heading">
+          <div>
+            <h2>市场货架</h2>
+            <p>浏览 Agent / Skill / Cron / Workflow，按分类与关键词筛选</p>
+          </div>
+        </div>
         <div className="sort-bar">
           <span className="result-count">
             共 <strong>{totalItems}</strong> 个商品
@@ -124,6 +131,14 @@ export default function HomePage() {
             <span className="empty-icon">🔍</span>
             <h3>没有找到相关商品</h3>
             <p>试试调整筛选条件或搜索其他关键词</p>
+            <div className="empty-actions">
+              <button className="btn btn-primary" onClick={() => setSearchParams({})}>
+                查看全部商品
+              </button>
+              <button className="btn btn-ghost" onClick={() => navigate('/publish')}>
+                发布商品
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -171,6 +186,8 @@ export default function HomePage() {
             )}
           </>
         )}
+
+        <HeroAdvantages />
       </div>
     </>
   )

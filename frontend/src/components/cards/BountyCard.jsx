@@ -14,9 +14,26 @@ const INITIAL_FORM = {
   deadline: '',
 }
 
+function buildInitialForm(card) {
+  // v2 zero-result guidance (and do_bounty) prefill top-level data fields;
+  // ongoing edits carry the form under data.form.
+  if (card?.data?.form) return { ...INITIAL_FORM, ...card.data.form }
+  const data = card?.data || {}
+  return {
+    ...INITIAL_FORM,
+    title: data.title || '',
+    description: data.description || '',
+    category: CATEGORIES.includes(data.category) ? data.category : 'Skill',
+    skill_type: SKILL_TYPES.includes(data.skill_type) ? data.skill_type : 'python',
+    budget_min: data.budget_min ?? '',
+    budget_max: data.budget_max ?? '',
+    deadline: data.deadline || '',
+  }
+}
+
 export default function BountyCard({ card, authToken, userId, onUpdate, onSubmit, onCancel }) {
   const [mode, setMode] = useState(card?.data?.mode || 'fill')
-  const [form, setForm] = useState(card?.data?.form || INITIAL_FORM)
+  const [form, setForm] = useState(buildInitialForm(card))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [createdId, setCreatedId] = useState(card?.data?.createdId || null)

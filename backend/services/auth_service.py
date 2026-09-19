@@ -42,8 +42,11 @@ async def login_user(username: str, password: str) -> dict | None:
     user = await db.fetch_user_by_username(username)
     if not user:
         return None
-    if not _verify_password(password, user["password_hash"]):
+    stored = user.get("password_hash") or ""
+    if ":" not in stored or not _verify_password(password, stored):
         return None
+    if user.get("status", "active") != "active":
+        return {"error": "账号已被封禁"}
 
     token = secrets.token_urlsafe(32)
     await db.update_user_token(user["id"], token)
@@ -54,6 +57,7 @@ async def login_user(username: str, password: str) -> dict | None:
         "nickname": user["nickname"],
         "token": token,
         "coins": user["coins"],
+        "role": user.get("role") or "user",
     }
 
 

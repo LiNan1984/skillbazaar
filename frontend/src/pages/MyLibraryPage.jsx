@@ -33,7 +33,7 @@ export default function MyLibraryPage({ userId, authToken }) {
     setLoading(true)
     try {
       // Always load library items (needed for skill assembly in agent tab)
-      const libPromise = userId ? getLibrary(userId).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
+      const libPromise = userId ? getLibrary(userId, authToken).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
       const agentsPromise = authToken ? getMyAgents(authToken).catch(() => []) : Promise.resolve([])
       const cronsPromise = authToken ? getMyCronSubscriptions(authToken).catch(() => []) : Promise.resolve([])
 
@@ -94,7 +94,7 @@ export default function MyLibraryPage({ userId, authToken }) {
   }
 
   return (
-    <div className="library-page" style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+    <div className="library-page page-shell" style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
       <h1 className="page-title" style={{ marginBottom: 24 }}>
         <Package size={28} />
         我的库

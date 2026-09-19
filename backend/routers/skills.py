@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 
 import database as db
 from services.skill_vault import encrypt_content
 from services.license_service import create_license, check_user_access, verify_license
 from services.execution_service import execute_skill
 from services.pricing_service import calculate_dynamic_price, get_price_analysis, recalculate_all_dynamic_prices
+from services.trial_limiter import check_rate_limit, record_request
 from models import (
     SkillAssetResponse, LicenseResponse, LicenseCreate,
     LicenseVerifyRequest, LicenseVerifyResponse, SkillExecutionRequest,
-    PricingUpdate,
+    PricingUpdate, LicenseType,
 )
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
@@ -61,31 +62,57 @@ async def upload_skill(
 
 
 @router.post("/{product_id}/execute")
-async def execute_skill_endpoint(product_id: int, req: SkillExecutionRequest):
+async def execute_skill_endpoint(product_id: int, req: SkillExecutionRequest, request: Request):
+    # --- Identity ---
     user_id = req.user_id or "anonymous"
+    is_anonymous = req.user_id is None
 
-    # Create trial license if user doesn't have one
-    access = await check_user_access(user_id, product_id)
-    license_id = None
+    # --- IP extraction for rate limiting (test: X-Forwarded-For; prod: client host) ---
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
 
-    if not access.get("has_access"):
-        try:
-            license_data = await create_license(
-                user_id=user_id,
-                product_id=product_id,
-                license_type="trial",
-                max_calls=3,
+    # --- Rate limit (anonymous only) ---
+    if is_anonymous:
+        allowed, retry_after = check_rate_limit(client_ip, product_id)
+        if not allowed:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=429,
+                content={"error": "今日试用次数已达上限", "retry_after": retry_after},
+                headers={"Retry-After": str(retry_after)},
             )
-            license_id = license_data.get("id")
-        except Exception:
-            license_id = None
-    else:
+
+    # --- License check / create trial ---
+    license_id = None
+    access = await check_user_access(user_id, product_id)
+    if access.get("has_access"):
         license_id = access.get("license", {}).get("id")
 
+    if license_id is None:
+        trial = await create_license(
+            user_id=user_id, product_id=product_id,
+            license_type=LicenseType.TRIAL, max_calls=3,
+        )
+        license_id = trial.get("id")
+
+    # --- Enforce max_calls BEFORE execution (authenticated users only) ---
+    # Anonymous users are rate-limited (10/hour per product); trial license
+    # max_calls is enforced for authenticated trial users.
+    if license_id and not is_anonymous:
+        lic = await db.fetch_license_by_id(license_id)
+        if lic and lic.get("max_calls") and lic.get("calls_count", 0) >= lic["max_calls"]:
+            return {"error": "试用次数已用完，购买后可继续使用", "trial_remaining": 0, "status": "trial_exhausted"}
+
+    # --- Input length check for trial ---
+    if is_anonymous and req.input_params and len(req.input_params) > 2000:
+        raise HTTPException(400, "试用输入不能超过 2000 字符")
+
+    # --- Skill asset ---
     skill_asset = await db.fetch_skill_asset(product_id)
     if not skill_asset:
         raise HTTPException(404, "No skill asset found for this product")
 
+    # --- Execute ---
     try:
         result = await execute_skill(
             user_id=user_id,
@@ -93,10 +120,23 @@ async def execute_skill_endpoint(product_id: int, req: SkillExecutionRequest):
             license_id=license_id,
             skill_asset=skill_asset,
             input_params=req.input_params,
+            trial_mode=is_anonymous,
         )
     except Exception as e:
         return {"error": str(e), "skill_type": skill_asset.get("skill_type", "unknown")}
 
+    # --- Post-execution bookkeeping ---
+    if is_anonymous:
+        record_request(client_ip, product_id)
+
+    trial_remaining = None
+    if license_id:
+        lic = await db.fetch_license_by_id(license_id)
+        if lic:
+            remaining = (lic.get("max_calls") or 0) - lic.get("calls_count", 0)
+            trial_remaining = max(0, remaining)
+
+    result["trial_remaining"] = trial_remaining
     return result
 
 

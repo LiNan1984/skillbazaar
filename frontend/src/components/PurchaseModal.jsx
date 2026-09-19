@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X, CheckCircle, AlertCircle } from 'lucide-react'
 import { buyProduct } from '../services/api'
 
-export default function PurchaseModal({ product, userId, balance, onClose, onSuccess }) {
+export default function PurchaseModal({ product, userId, authToken, balance, onClose, onSuccess }) {
   const [purchasing, setPurchasing] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -11,11 +11,15 @@ export default function PurchaseModal({ product, userId, balance, onClose, onSuc
 
   const handlePurchase = async () => {
     if (insufficient || purchasing) return
+    if (!authToken) {
+      setError('请先登录后再购买')
+      return
+    }
     setPurchasing(true)
     setError('')
 
     try {
-      await buyProduct(userId, product.id)
+      await buyProduct(product.id, authToken)
       setSuccess(true)
       setTimeout(() => {
         if (onSuccess) onSuccess()
@@ -99,9 +103,9 @@ export default function PurchaseModal({ product, userId, balance, onClose, onSuc
               <button
                 className="btn btn-primary btn-purchase"
                 onClick={handlePurchase}
-                disabled={insufficient || purchasing}
+                disabled={insufficient || purchasing || !authToken}
               >
-                {purchasing ? '购买中...' : '确认购买'}
+                {!authToken ? '请先登录' : purchasing ? '购买中...' : '确认购买'}
               </button>
             </div>
           </>

@@ -31,6 +31,7 @@ export default function AuthModal({ mode: initialMode, onClose, onSuccess }) {
           localStorage.setItem('skillbazaar_user_id', data.user_id)
           localStorage.setItem('skillbazaar_username', data.username)
           localStorage.setItem('skillbazaar_nickname', data.nickname)
+          localStorage.setItem('skillbazaar_role', data.role || 'user')
           onSuccess(data)
         } else {
           setError('用户名或密码错误')

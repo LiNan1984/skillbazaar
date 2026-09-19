@@ -64,7 +64,7 @@ export default function BountyPage({ userId, authToken }) {
   }
 
   return (
-    <div className="bounty-page">
+    <div className="bounty-page page-shell">
       <div className="bounty-header">
         <div>
           <h1>悬赏任务市场</h1>
@@ -168,6 +168,13 @@ export default function BountyPage({ userId, authToken }) {
           <span className="empty-icon">📋</span>
           <h3>暂无悬赏任务</h3>
           <p>发布一个悬赏，让开发者为你定制技能</p>
+          <div className="empty-actions">
+            {authToken ? (
+              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>发布悬赏</button>
+            ) : (
+              <button className="btn btn-ghost" onClick={() => navigate('/')}>去市场逛逛</button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="bounty-list">

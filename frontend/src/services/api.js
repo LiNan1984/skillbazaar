@@ -12,7 +12,11 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    console.error('API 错误:', error.response?.data || error.message)
+    // Auth failures are expected for anonymous/expired sessions; callers handle them silently.
+    const status = error.response?.status
+    if (status !== 401 && status !== 403) {
+      console.error('API 错误:', error.response?.data || error.message)
+    }
     return Promise.reject(error.response?.data || error)
   }
 )
@@ -55,22 +59,55 @@ export async function getUser(id) {
 
 // ---- 交易相关 ----
 
-export async function buyProduct(userId, productId) {
-  return api.post('/transactions/buy', { buyer_id: userId, product_id: productId })
+export async function buyProduct(productId, token) {
+  return api.post('/transactions/buy', { product_id: productId }, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
-export async function getTransactions(userId) {
-  return api.get(`/transactions/user/${userId}`)
+export async function getTransactions(userId, token) {
+  return api.get(`/transactions/user/${userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
-export async function getLibrary(userId) {
-  return api.get(`/transactions/library/${userId}`)
+export async function getLibrary(userId, token) {
+  return api.get(`/transactions/library/${userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+// ---- 商品评价 ----
+
+export async function getProductReviews(productId, page = 1, pageSize = 10) {
+  return api.get(`/products/${productId}/reviews?page=${page}&page_size=${pageSize}`)
+}
+
+export async function createProductReview(productId, rating, content, token) {
+  return api.post(`/products/${productId}/reviews`, { rating, content }, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
 // ---- 聊天相关 ----
 
-export async function sendChat(userId, message, card = null) {
-  return api.post('/chat', { user_id: userId, message, card }, { timeout: 60000 })
+export async function sendChat(token, message, card = null) {
+  return api.post('/chat', { message, card }, {
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 60000,
+  })
+}
+
+export async function getChatHistory(token, limit = 20) {
+  return api.get(`/chat/history?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function clearChatHistory(token) {
+  return api.delete('/chat/history', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
 // ---- 分类相关 ----

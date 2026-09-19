@@ -210,40 +210,56 @@ export default function AdminPage({ authToken }) {
 
   function renderUsers() {
     return (
-      <div className="admin-table-wrapper">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>ID</th><th>用户名</th><th>昵称</th><th>金币</th><th>角色</th><th>状态</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 && !loading && (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32 }}>暂无数据</td></tr>
-            )}
-            {users.map((u) => (
-              <tr key={u.id || u.user_id}>
-                <td>{u.id || u.user_id}</td>
-                <td>{u.username || '-'}</td>
-                <td>{u.nickname || '-'}</td>
-                <td>{u.coins ?? u.balance ?? '-'}</td>
-                <td>{u.role || '-'}</td>
-                <td><span className={`status-badge ${u.status === 'active' ? 'active' : 'inactive'}`}>{u.status}</span></td>
-                <td>
-                  <div className="admin-actions">
-                    <button className="btn btn-sm btn-delist" onClick={() => handleUserAction(u.id || u.user_id, 'banned')}><Ban size={12} /> 封禁</button>
-                    <button className="btn btn-sm btn-relist" onClick={() => handleUserAction(u.id || u.user_id, 'active')}><CheckCircle size={12} /> 激活</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="pagination" style={{ marginTop: 16 }}>
-          <button className="page-btn" disabled={userPage <= 1} onClick={() => setUserPage((p) => p - 1)}>上一页</button>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>第 {userPage} 页</span>
-          <button className="page-btn" onClick={() => setUserPage((p) => p + 1)}>下一页</button>
+      <div className="admin-users-panel">
+        <div className="admin-section-header">
+          <h2>用户管理</h2>
+          <p>查看注册用户，执行封禁 / 激活。被封禁的账号无法登录，已签发令牌立即失效。</p>
         </div>
+        {loading && users.length === 0 ? (
+          <div className="loading-skeleton admin-users-loading">
+            <div className="skeleton-card shimmer" />
+            <div className="skeleton-card shimmer" />
+          </div>
+        ) : users.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-icon">👤</span>
+            <h3>暂无用户</h3>
+            <p>还没有可管理的账号。封禁 / 激活会显示在用户列表操作列。</p>
+          </div>
+        ) : (
+          <div className="admin-table-wrapper">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>用户名</th><th>昵称</th><th>金币</th><th>角色</th><th>状态</th><th>封禁 / 激活</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id || u.user_id}>
+                    <td>{u.id || u.user_id}</td>
+                    <td>{u.username || '-'}</td>
+                    <td>{u.nickname || '-'}</td>
+                    <td>{u.coins ?? u.balance ?? '-'}</td>
+                    <td>{u.role || '-'}</td>
+                    <td><span className={`status-badge ${u.status === 'active' ? 'active' : 'inactive'}`}>{u.status === 'banned' ? '已封禁' : (u.status || 'active')}</span></td>
+                    <td>
+                      <div className="admin-actions">
+                        <button className="btn btn-sm btn-delist" onClick={() => handleUserAction(u.id || u.user_id, 'banned')}><Ban size={12} /> 封禁</button>
+                        <button className="btn btn-sm btn-relist" onClick={() => handleUserAction(u.id || u.user_id, 'active')}><CheckCircle size={12} /> 激活</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="pagination" style={{ marginTop: 16 }}>
+              <button className="page-btn" disabled={userPage <= 1} onClick={() => setUserPage((p) => p - 1)}>上一页</button>
+              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>第 {userPage} 页</span>
+              <button className="page-btn" onClick={() => setUserPage((p) => p + 1)}>下一页</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -289,7 +305,7 @@ export default function AdminPage({ authToken }) {
 
   if (!authToken) {
     return (
-      <div className="admin-page">
+      <div className="admin-page page-shell">
         <div className="empty-state" style={{ padding: 80 }}>
           <ShieldAlert size={56} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
           <h3>需要管理员登录</h3>
@@ -300,7 +316,7 @@ export default function AdminPage({ authToken }) {
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page page-shell">
       <div className="page-title">
         <ShieldAlert size={28} />
         管理后台

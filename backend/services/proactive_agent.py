@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 
 import database as db
 import services.product_service as product_service
 
 LLM_API_URL = "https://api.finmall.com/v1/chat/completions"
-LLM_API_KEY = "sk-bV3TVx9azStj8KJe3oW0rsqpaIZKX8E21wyXMtHYCjWBxly1"
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = "GLM-5.1-FP8"
 
 

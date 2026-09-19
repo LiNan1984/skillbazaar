@@ -7,6 +7,7 @@ from typing import Optional
 import httpx
 
 import database as db
+from services.notification_service import notify
 
 
 async def register_cron_product(user_id: str, product_id: int, schedule_cron: str, result_format: str = "json") -> dict:
@@ -56,6 +57,19 @@ async def push_cron_result(cron_id: int, secret: str, payload: str, duration_ms:
     log_id = await db.insert_execution_log(cron_id, payload, "success", duration_ms)
     await db.increment_cron_execution(cron_id)
     subs = await db.fetch_active_subscriptions(cron_id)
+
+    product = await db.fetch_product_by_id(cron["product_id"])
+    product_name = product["name"] if product else f"Cron#{cron_id}"
+    summary = (payload or "")[:120]
+    for sub in subs:
+        await notify(
+            sub["subscriber_id"], "cron_result",
+            f"定时任务新结果：{product_name}",
+            f"您订阅的「{product_name}」有新的执行结果：{summary}",
+            {"cron_id": cron_id, "log_id": log_id,
+             "subscription_id": sub["id"], "product_id": cron["product_id"]},
+        )
+
     delivery_results = []
     async with httpx.AsyncClient(timeout=10) as client:
         for sub in subs:

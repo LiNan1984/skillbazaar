@@ -50,6 +50,8 @@ async def login(req: LoginRequest):
     result = await auth_service.login_user(req.username, req.password)
     if not result:
         raise HTTPException(401, "用户名或密码错误")
+    if result.get("error"):
+        raise HTTPException(403, result["error"])
     return AuthResponse(**result)
 
 

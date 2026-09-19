@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
+
 import httpx
 
 LLM_API_URL = "https://api.finmall.com/v1/chat/completions"
-LLM_API_KEY = "sk-bV3TVx9azStj8KJe3oW0rsqpaIZKX8E21wyXMtHYCjWBxly1"
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = "GLM-5.1-FP8"
 
 RISK_PROMPT = """你是 SkillBazaar 平台的内容安全审核AI。分析以下内容是否包含风险。
@@ -32,7 +35,13 @@ RISK_PROMPT = """你是 SkillBazaar 平台的内容安全审核AI。分析以下
 """
 
 
+class RiskScanUnavailable(Exception):
+    """LLM unavailable (missing key/outage); scan must fail open without fake data."""
+
+
 async def _call_llm(messages: list[dict], max_tokens: int = 512) -> str:
+    if not LLM_API_KEY:
+        raise RiskScanUnavailable("LLM_API_KEY 未配置，跳过 AI 风控扫描")
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
         "Content-Type": "application/json",
@@ -88,15 +97,10 @@ async def scan_bounty_risks(bounty: dict) -> dict:
             "risk_tags": parsed.get("risk_tags", []),
             "reason": parsed.get("reason", ""),
         }
-    except Exception as e:
-        return {
-            "item_type": "bounty",
-            "item_id": bounty.get("id"),
-            "title": bounty.get("title", ""),
-            "risk_score": 0,
-            "risk_tags": [],
-            "reason": f"扫描失败: {e}",
-        }
+    except Exception as exc:
+        # Fail open: no pseudo "scan failed" record written; caller skips it.
+        logging.warning("bounty risk scan skipped for %s: %s", bounty.get("id"), exc)
+        return None
 
 
 async def scan_skill_risks(skill_asset: dict) -> dict:
@@ -116,15 +120,9 @@ async def scan_skill_risks(skill_asset: dict) -> dict:
             "risk_tags": parsed.get("risk_tags", []),
             "reason": parsed.get("reason", ""),
         }
-    except Exception as e:
-        return {
-            "item_type": "skill",
-            "item_id": skill_asset.get("id"),
-            "title": skill_asset.get("product_name", ""),
-            "risk_score": 0,
-            "risk_tags": [],
-            "reason": f"扫描失败: {e}",
-        }
+    except Exception as exc:
+        logging.warning("skill risk scan skipped for %s: %s", skill_asset.get("id"), exc)
+        return None
 
 
 async def scan_all_risks() -> list[dict]:
@@ -136,14 +134,14 @@ async def scan_all_risks() -> list[dict]:
     bounties, _ = await db.fetch_bounties(status="open", page=1, page_size=100)
     for bounty in bounties:
         result = await scan_bounty_risks(bounty)
-        if result["risk_score"] > 70:
+        if result and result["risk_score"] > 70:
             flagged.append(result)
 
     # Scan active skills
     skills, _ = await list_skills_with_meta(page=1, page_size=100)
     for skill in skills:
         result = await scan_skill_risks(skill)
-        if result["risk_score"] > 70:
+        if result and result["risk_score"] > 70:
             flagged.append(result)
 
     # Sort by risk_score descending

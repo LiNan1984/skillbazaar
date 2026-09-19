@@ -80,7 +80,7 @@ export default function ActivitiesPage({ userId, authToken, onLoginClick }) {
   const allTasks = activities.flatMap((a) => a.tasks || [])
 
   return (
-    <div className="activity-page">
+    <div className="activity-page page-shell">
       <div className="activity-header">
         <h1><Trophy size={28} style={{ marginRight: 12, verticalAlign: 'middle' }} />活动任务中心</h1>
         {points && (

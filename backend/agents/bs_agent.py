@@ -52,3 +52,10 @@ def get_agent():
     if _compiled is None:
         _compiled = build_graph().compile(checkpointer=_memory)
     return _compiled
+
+
+def reset_state():
+    """Drop the compiled graph and its in-memory checkpoints (process-restart equivalent)."""
+    global _compiled, _memory
+    _compiled = None
+    _memory = MemorySaver()

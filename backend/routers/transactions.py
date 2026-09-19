@@ -1,14 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from models import TransactionCreate
 import services.transaction_service as tx_service
+from routers.user_v2 import get_current_user
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
 @router.post("/buy")
-async def buy_product(body: TransactionCreate):
+async def buy_product(body: TransactionCreate, user: dict = Depends(get_current_user)):
+    # Identity always comes from the Bearer token; body.buyer_id is deprecated.
     try:
-        result = await tx_service.buy_product(body.buyer_id, body.product_id)
+        result = await tx_service.buy_product(user["id"], body.product_id)
         return {
             "success": True,
             "message": "购买成功",
@@ -29,12 +31,18 @@ async def get_user_transactions(
     user_id: str,
     page: int = 1,
     page_size: int = 20,
+    user: dict = Depends(get_current_user),
 ):
-    result = await tx_service.get_user_transactions(user_id, page, page_size)
+    # Close the historical IDOR: token identity must match the path id.
+    if user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="无权查看他人交易记录")
+    result = await tx_service.get_user_transactions(user["id"], page, page_size)
     return {"success": True, "data": result}
 
 
 @router.get("/library/{user_id}")
-async def get_user_library(user_id: str):
-    items = await tx_service.get_user_library(user_id)
+async def get_user_library(user_id: str, user: dict = Depends(get_current_user)):
+    if user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="无权查看他人商品库")
+    items = await tx_service.get_user_library(user["id"])
     return {"success": True, "data": items, "total": len(items)}

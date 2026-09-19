@@ -117,7 +117,7 @@ export default function PublishPage({ userId, authToken }) {
   }
 
   return (
-    <div className="publish-page">
+    <div className="publish-page page-shell">
       <div className="publish-container">
         <h1 className="publish-title">
           <Upload size={28} />

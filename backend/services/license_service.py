@@ -65,6 +65,31 @@ async def verify_license(token: str, product_id: int) -> dict:
     }
 
 
+async def verify_license_by_id(license_id: int) -> dict:
+    """Verify a license by its numeric ID (used internally after creation)."""
+    license_data = await db.fetch_license_by_id(license_id)
+    if not license_data:
+        return {"valid": False, "reason": "License not found"}
+    if license_data["status"] != "active":
+        return {"valid": False, "reason": "License revoked"}
+    if license_data["expires_at"]:
+        expires = datetime.fromisoformat(license_data["expires_at"])
+        if datetime.now() > expires:
+            return {"valid": False, "reason": "License expired"}
+    calls_remaining = None
+    if license_data["max_calls"]:
+        calls_remaining = license_data["max_calls"] - license_data["calls_count"]
+        if calls_remaining <= 0:
+            return {"valid": False, "reason": "Call limit reached"}
+    return {
+        "valid": True,
+        "license_id": license_data["id"],
+        "license_type": license_data["license_type"],
+        "calls_remaining": calls_remaining,
+        "expires_at": license_data["expires_at"],
+    }
+
+
 async def check_user_access(user_id: str, product_id: int) -> dict:
     license_data = await db.check_user_has_license(user_id, product_id)
     if not license_data:

@@ -27,6 +27,39 @@ const ADVANTAGES = [
   },
 ]
 
+export function HeroAdvantages() {
+  return (
+    <div className="hero-advantages">
+      <h2 className="hero-advantages-title">为什么选择 SkillBazaar？</h2>
+      <div className="hero-advantages-grid">
+        {ADVANTAGES.map((adv) => (
+          <div key={adv.title} className="hero-advantage-card">
+            <div className="hero-advantage-icon">{adv.icon}</div>
+            <div className="hero-advantage-content">
+              <div className="hero-advantage-header">
+                <h3>{adv.title}</h3>
+                <span className="hero-advantage-tag">{adv.tag}</span>
+              </div>
+              <p>{adv.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hero-comparison">
+        <div className="hero-comparison-item">
+          <span className="hero-comparison-label">GitHub 免费 SKILL.md</span>
+          <span className="hero-comparison-minus">明文公开 · 无执行 · 无保护 · 无变现</span>
+        </div>
+        <div className="hero-comparison-vs">VS</div>
+        <div className="hero-comparison-item highlight">
+          <span className="hero-comparison-label">SkillBazaar 付费技能</span>
+          <span className="hero-comparison-plus">加密保护 · 托管运行 · 动态定价 · 悬赏交易</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HeroBanner() {
   const navigate = useNavigate()
 
@@ -43,12 +76,11 @@ export default function HeroBanner() {
         </h1>
 
         <p className="hero-subtitle">
-          发现、购买和发布 AI Agent / Skill / Cron / Workflow，<br />
-          加密保护 + 托管执行 + 动态定价 + 悬赏定制
+          发现、购买和发布 AI Agent / Skill / Cron / Workflow
         </p>
 
         <div className="hero-actions">
-          <button className="btn btn-primary" onClick={() => navigate('/')}>
+          <button className="btn btn-primary" onClick={() => document.querySelector('.catalog-heading')?.scrollIntoView({ behavior: 'smooth' })}>
             探索市场
           </button>
           <button className="btn btn-ghost" onClick={() => navigate('/bounties')}>
@@ -73,35 +105,6 @@ export default function HeroBanner() {
           <div className="hero-stat">
             <span className="hero-stat-value">10K</span>
             <span className="hero-stat-label">注册即送</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="hero-advantages">
-        <h2 className="hero-advantages-title">为什么选择 SkillBazaar？</h2>
-        <div className="hero-advantages-grid">
-          {ADVANTAGES.map((adv) => (
-            <div key={adv.title} className="hero-advantage-card">
-              <div className="hero-advantage-icon">{adv.icon}</div>
-              <div className="hero-advantage-content">
-                <div className="hero-advantage-header">
-                  <h3>{adv.title}</h3>
-                  <span className="hero-advantage-tag">{adv.tag}</span>
-                </div>
-                <p>{adv.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="hero-comparison">
-          <div className="hero-comparison-item">
-            <span className="hero-comparison-label">GitHub 免费 SKILL.md</span>
-            <span className="hero-comparison-minus">明文公开 · 无执行 · 无保护 · 无变现</span>
-          </div>
-          <div className="hero-comparison-vs">VS</div>
-          <div className="hero-comparison-item highlight">
-            <span className="hero-comparison-label">SkillBazaar 付费技能</span>
-            <span className="hero-comparison-plus">加密保护 · 托管运行 · 动态定价 · 悬赏交易</span>
           </div>
         </div>
       </div>

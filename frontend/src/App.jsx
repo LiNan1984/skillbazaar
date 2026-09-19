@@ -30,6 +30,9 @@ function App() {
   const handleAuthSuccess = (data) => {
     setUserId(data.user_id)
     setAuthToken(data.token)
+    if (data.role) {
+      localStorage.setItem('skillbazaar_role', data.role)
+    }
     setAuthModal(null)
   }
 
@@ -62,6 +65,7 @@ function App() {
             localStorage.removeItem('skillbazaar_user_id')
             localStorage.removeItem('skillbazaar_username')
             localStorage.removeItem('skillbazaar_nickname')
+            localStorage.removeItem('skillbazaar_role')
             setUserId('')
             setAuthToken('')
           }}

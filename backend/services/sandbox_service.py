@@ -42,10 +42,10 @@ _fernet = Fernet(SHRIMP_POND_KEY.encode())
 CUBELET_SOCKET = "/data/cubelet/cubelet.sock"
 SANDBOX_NS = "skbz-sandbox"
 LLM_API_BASE = os.environ.get("LLM_API_BASE", "https://xiaozhuoai.harness-agent.app/v1")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "sk-QW108qXpL5pCcuqehgm6r1FRucTsYFN9WCygybF664Caoh8e")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "GLM-5.1-FP8")
 
-DB_PATH = os.environ.get("SKBZ_DB_PATH", "/root/skillbazaar/backend/data/skillbazaar.db")
+DB_PATH = os.environ.get("SKBZ_DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "skillbazaar.db"))
 
 # Sandbox workspace base dir
 SANDBOX_WORKSPACE = "/data/skbz-sandbox-workspaces"

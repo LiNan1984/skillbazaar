@@ -12,6 +12,8 @@ from routers.cron import router as cron_router
 from routers.activities import router as activities_router
 from routers.agents import router as agents_router
 from routers.sandbox import router as sandbox_router
+from routers.discovery import router as discovery_router
+from routers.profiles import router as profiles_router
 
 
 @asynccontextmanager
@@ -47,6 +49,8 @@ app.include_router(cron_router)
 app.include_router(activities_router)
 app.include_router(agents_router)
 app.include_router(sandbox_router)
+app.include_router(discovery_router)
+app.include_router(profiles_router)
 
 
 @app.get("/")

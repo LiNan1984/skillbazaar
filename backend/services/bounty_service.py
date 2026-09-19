@@ -4,6 +4,7 @@ from datetime import datetime
 
 import database as db
 from services.skill_vault import encrypt_content
+from services.notification_service import notify
 
 
 async def create_bounty(user_id: str, data: dict) -> dict:
@@ -60,6 +61,15 @@ async def apply_for_bounty(developer_id: str, data: dict) -> dict:
         "quoted_price": data["quoted_price"],
         "portfolio": data.get("portfolio", ""),
     })
+
+    dev = await db.fetch_user(developer_id)
+    await notify(
+        bounty["poster_id"], "bounty_application",
+        f"悬赏收到新申请：{bounty['title']}",
+        f"开发者 {dev.get('nickname') if dev else developer_id} 申请了您的悬赏「{bounty['title']}」，报价 {data['quoted_price']} 金币。",
+        {"bounty_id": data["bounty_id"], "application_id": app_id,
+         "developer_id": developer_id},
+    )
     return {"id": app_id, "status": "pending"}
 
 
@@ -99,6 +109,13 @@ async def select_developer(poster_id: str, application_id: int) -> dict:
         if a["id"] != application_id and a["status"] == "pending":
             await db.update_bounty_application(a["id"], "rejected")
 
+    await notify(
+        app["developer_id"], "bounty_selected",
+        f"您已被选中：{bounty['title']}",
+        f"悬赏主已选中您承接「{bounty['title']}」，成交价 {app['quoted_price']} 金币，请尽快提交交付。",
+        {"bounty_id": app["bounty_id"], "application_id": application_id},
+    )
+
     return {"status": "in_progress", "developer_id": app["developer_id"]}
 
 
@@ -126,6 +143,15 @@ async def deliver_bounty(developer_id: str, bounty_id: int, description: str = "
     })
 
     await db.update_bounty(bounty_id, {"status": "delivered"})
+
+    dev = await db.fetch_user(developer_id)
+    await notify(
+        bounty["poster_id"], "bounty_delivered",
+        f"悬赏有新交付：{bounty['title']}",
+        f"开发者 {dev.get('nickname') if dev else developer_id} 已提交「{bounty['title']}」的交付，请及时验收。",
+        {"bounty_id": bounty_id, "delivery_id": delivery_id,
+         "developer_id": developer_id},
+    )
     return {"id": delivery_id, "status": "delivered"}
 
 
@@ -186,5 +212,15 @@ async def review_delivery(poster_id: str, delivery_id: int, accept: bool) -> dic
             "reviewed_at": datetime.now().isoformat(),
         })
         await db.update_bounty(delivery["bounty_id"], {"status": "in_progress"})
+
+    await notify(
+        delivery["developer_id"],
+        "bounty_accepted" if accept else "bounty_rejected",
+        f"交付{'已通过验收' if accept else '被拒绝'}：{bounty['title']}",
+        (f"恭喜！您对「{bounty['title']}」的交付已通过验收。"
+         if accept else
+         f"您对「{bounty['title']}」的交付未通过验收，请根据反馈修改后重新提交。"),
+        {"bounty_id": delivery["bounty_id"], "delivery_id": delivery_id},
+    )
 
     return {"status": "accepted" if accept else "rejected"}

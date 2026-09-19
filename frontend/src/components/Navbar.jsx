@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, Wallet, Plus, Library, LogIn, UserPlus, LogOut, Store, Target, Shield, Trophy, Box, Globe } from 'lucide-react'
 import { getUser, getMe } from '../services/api'
+import NotificationBell from './NotificationBell'
 import { useLang, ZH, EN } from '../i18n'
 
 export default function Navbar({ userId, setUserId, authToken, onLoginClick, onRegisterClick, onWalletClick, onLogout }) {
@@ -84,25 +85,25 @@ export default function Navbar({ userId, setUserId, authToken, onLoginClick, onR
             <span className="btn-text">{t('nav.bounties')}</span>
           </button>
 
-          <button className={`btn btn-ghost btn-sm ${location.pathname === '/activities' ? 'nav-active' : ''}`} onClick={() => navigate('/activities')}>
+          <button className={`btn btn-ghost btn-sm nav-optional ${location.pathname === '/activities' ? 'nav-active' : ''}`} onClick={() => navigate('/activities')}>
             <Trophy size={16} />
             <span className="btn-text">{t('nav.activities')}</span>
           </button>
 
-          <button className={`btn btn-ghost btn-sm ${location.pathname === '/sandbox' ? 'nav-active' : ''}`} onClick={() => navigate('/sandbox')} title="Sandbox">
+          <button className={`btn btn-ghost btn-sm nav-optional ${location.pathname === '/sandbox' ? 'nav-active' : ''}`} onClick={() => navigate('/sandbox')} title="Sandbox">
             <Box size={16} />
             <span className="btn-text">{t('nav.sandbox')}</span>
           </button>
 
           {authToken && (
-            <button className={`btn btn-ghost btn-sm ${location.pathname === '/seller' ? 'nav-active' : ''}`} onClick={() => navigate('/seller')}>
+            <button className={`btn btn-ghost btn-sm nav-optional ${location.pathname === '/seller' ? 'nav-active' : ''}`} onClick={() => navigate('/seller')}>
               <Store size={16} />
               <span className="btn-text">{t('nav.seller')}</span>
             </button>
           )}
 
           {authToken && (localStorage.getItem('skillbazaar_role') === 'admin' || localStorage.getItem('skillbazaar_nickname') === 'admin') && (
-            <button className={`btn btn-ghost btn-sm ${location.pathname === '/admin' ? 'nav-active' : ''}`} onClick={() => navigate('/admin')}>
+            <button className={`btn btn-ghost btn-sm nav-optional ${location.pathname === '/admin' ? 'nav-active' : ''}`} onClick={() => navigate('/admin')}>
               <Shield size={16} />
               <span className="btn-text">{t('nav.admin')}</span>
             </button>
@@ -113,8 +114,9 @@ export default function Navbar({ userId, setUserId, authToken, onLoginClick, onR
             <span className="btn-text">{t('nav.library')}</span>
           </button>
 
-          {/* Language Switch */}
-          <button className="btn btn-ghost btn-sm lang-switch-btn" onClick={toggleLang} title={lang === ZH ? 'Switch to English' : '切换中文'}>
+          <NotificationBell token={authToken} />
+
+          <button className="btn btn-ghost btn-sm lang-switch-btn nav-secondary" onClick={toggleLang} title={lang === ZH ? 'Switch to English' : '切换中文'}>
             <Globe size={16} />
             <span className="btn-text">{lang === ZH ? 'EN' : '中'}</span>
           </button>

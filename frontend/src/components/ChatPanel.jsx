@@ -1,90 +1,123 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { X, Send, RotateCcw } from 'lucide-react'
-import { sendChat } from '../services/api'
+import { X, Send, RotateCcw, FileText } from 'lucide-react'
+import { sendChat, getChatHistory, clearChatHistory } from '../services/api'
 import WelcomeCard from './cards/WelcomeCard'
 import PublishCard from './cards/PublishCard'
 import BountyCard from './cards/BountyCard'
 import AnalysisCard from './cards/AnalysisCard'
+import MatchCard from './cards/MatchCard'
 
-const STORAGE_KEY_MSGS = 'skillbazaar_chat_messages'
-const STORAGE_KEY_CARD = 'skillbazaar_active_card'
-
-function getStoredCard() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_CARD)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
+const WELCOME = {
+  role: 'bot',
+  content: '您好！我是 BS买卖助手，帮您搜索推荐 AI 技能商品，也能引导您上传发布。有什么需要？',
+  welcome: true,
 }
 
-function saveCard(card) {
-  if (card) {
-    localStorage.setItem(STORAGE_KEY_CARD, JSON.stringify(card))
-  } else {
-    localStorage.removeItem(STORAGE_KEY_CARD)
-  }
+// Cards rendered inline inside chat messages (live and replayed history).
+const INTERACTIVE_CARD_TYPES = ['publish', 'bounty', 'analysis', 'match']
+
+function isDoneCard(card) {
+  return card?.data?.mode === 'done'
 }
 
-function getStoredMessages() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_MSGS)
-    if (raw) {
-      const msgs = JSON.parse(raw)
-      if (Array.isArray(msgs) && msgs.length > 0) return msgs
-    }
-  } catch { /* ignore */ }
-  return null
-}
+function ReadOnlyCardSummary({ card }) {
+  const isBounty = card.type === 'bounty'
+  const form = card.data?.form || card.data || {}
+  const title = form.title || form.name || (isBounty ? '历史悬赏需求' : '历史商品草稿')
+  const rows = [
+    ['描述', form.description],
+    ['分类', form.category],
+    isBounty
+      ? ['预算', form.budget_min || form.budget_max ? `¥${form.budget_min || 0} - ¥${form.budget_max || 0}` : null]
+      : ['价格', form.price != null && form.price !== '' ? `¥${form.price}` : null],
+    ['截止日期', form.deadline],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '')
 
-function saveMessages(messages) {
-  try {
-    localStorage.setItem(STORAGE_KEY_MSGS, JSON.stringify(messages.slice(-100)))
-  } catch { /* ignore */ }
+  return (
+    <div className="publish-card" style={{ opacity: 0.85 }}>
+      <div className="publish-card-header" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <FileText size={14} />
+        {isBounty ? '历史悬赏（只读）' : '历史发布草稿（只读）'}
+      </div>
+      <div className="publish-card-preview">
+        <div className="publish-card-field">
+          <span className="publish-card-label">标题：</span>
+          <span>{title}</span>
+        </div>
+        {rows.map(([label, value]) => (
+          <div className="publish-card-field" key={label}>
+            <span className="publish-card-label">{label}：</span>
+            <span>{value}</span>
+          </div>
+        ))}
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+          历史卡片仅供查看，如需再次操作请重新发起需求。
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function renderCard(card, props) {
   if (!card) return null
   switch (card.type) {
     case 'publish':
-      return <PublishCard card={card} {...props} />
+      return props.readOnly ? <ReadOnlyCardSummary card={card} /> : <PublishCard card={card} {...props} />
     case 'bounty':
-      return <BountyCard card={card} {...props} />
+      return props.readOnly ? <ReadOnlyCardSummary card={card} /> : <BountyCard card={card} {...props} />
     case 'analysis':
       return <AnalysisCard card={card} />
+    case 'match':
+      return <MatchCard card={card} authToken={props.authToken} userId={props.userId} />
     default:
+      // Legacy 'products' cards degrade to a non-interactive list (no buttons).
       return null
   }
 }
 
 export default function ChatPanel({ open, onClose, userId, authToken }) {
-  const [messages, setMessages] = useState(() => {
-    const stored = getStoredMessages()
-    if (stored) return stored
-    return [
-      {
-        role: 'bot',
-        content: '您好！我是 BS买卖助手，帮您搜索推荐 AI 技能商品，也能引导您上传发布。有什么需要？',
-        welcome: true,
-      },
-    ]
-  })
+  const [messages, setMessages] = useState([WELCOME])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [activeCard, setActiveCard] = useState(getStoredCard)
+  const [clearing, setClearing] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Persist messages whenever they change
+  // Load persisted history from server on open
   useEffect(() => {
-    saveMessages(messages)
-  }, [messages])
+    if (!authToken) {
+      setMessages([WELCOME])
+      return
+    }
+    let cancelled = false
+    getChatHistory(authToken, 20)
+      .then((data) => {
+        if (cancelled) return
+        const rows = data.messages || []
+        if (rows.length === 0) {
+          setMessages([WELCOME])
+          return
+        }
+        setMessages(rows.map((m) => ({
+          role: m.role === 'user' ? 'user' : 'bot',
+          content: m.content || '',
+          card: m.card || null,
+        })))
+      })
+      .catch(() => {
+        // 401 or network error: stay on the welcome screen without console noise
+        if (!cancelled) setMessages([WELCOME])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authToken])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, activeCard])
+  }, [messages])
 
   useEffect(() => {
     if (open) {
@@ -92,14 +125,39 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
     }
   }, [open])
 
-  const handleCardUpdate = (updatedCard) => {
-    setActiveCard(updatedCard)
-    saveCard(updatedCard)
+  // Index of the latest editable (fill/preview, not done) form card per type.
+  // Only that card stays interactive on replay; older ones render read-only.
+  const editableIndexByType = useMemo(() => {
+    const map = {}
+    messages.forEach((m, i) => {
+      const card = m.card
+      if (card && card.step === 'fill' && !isDoneCard(card)) {
+        map[card.type] = i
+      }
+    })
+    return map
+  }, [messages])
+
+  // Card attached to the next outgoing message (slot-update context).
+  const activeFormCard = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const card = messages[i].card
+      if (card && card.step === 'fill' && !isDoneCard(card)) {
+        return card
+      }
+    }
+    return null
+  }, [messages])
+
+  const handleCardUpdate = (index, updatedCard) => {
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, card: updatedCard } : m)))
+  }
+
+  const handleCardCancel = (index) => {
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, card: null } : m)))
   }
 
   const handleCardSubmit = (productId) => {
-    setActiveCard(null)
-    saveCard(null)
     setMessages((prev) => [
       ...prev,
       { role: 'bot', content: `商品已成功发布！[查看商品](/product/${productId})` },
@@ -107,22 +165,16 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
   }
 
   const handleBountySubmit = (bountyId) => {
-    setActiveCard(null)
-    saveCard(null)
     setMessages((prev) => [
       ...prev,
       { role: 'bot', content: `悬赏已成功发布！[查看悬赏](/bounty/${bountyId})` },
     ])
   }
 
-  const handleCardCancel = () => {
-    setActiveCard(null)
-    saveCard(null)
-  }
-
   const handleSend = async (text) => {
     const message = text || input.trim()
     if (!message || loading) return
+    if (!authToken) return
 
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', content: message }])
@@ -143,38 +195,24 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
     setLoading(true)
 
     try {
-      const data = await sendChat(userId, message, activeCard)
+      const data = await sendChat(authToken, message, activeFormCard)
       const reply = data.reply || data.message || data.response || ''
-      const card = data.card || null
-      const products = data.products || data.recommendations || []
+      const card = data.card && INTERACTIVE_CARD_TYPES.includes(data.card.type) ? data.card : null
 
-      // Remove thinking message and add real response
+      // Attach the card to the current-turn bot message so it renders live
+      // (previously it only appeared after a history refresh).
       setMessages((prev) => {
         const withoutThinking = prev.filter((m) => m.id !== thinkingId)
         const updated = [...withoutThinking]
         if (reply) {
-          updated.push({ role: 'bot', content: reply })
-        }
-        if (products.length > 0) {
-          const tableRows = products
-            .map(
-              (p) =>
-                `| [${p.name}](/product/${p.id}) | ${p.category || ''} | **¥${p.price || 0}** | ${p.rating || 'N/A'} |`
-            )
-            .join('\n')
-          const table = `### 推荐商品\n\n| 名称 | 分类 | 价格 | 评分 |\n|------|------|------|------|\n${tableRows}`
-          updated.push({ role: 'bot', content: table })
-        }
-        if (!reply && products.length === 0 && !card) {
+          updated.push({ role: 'bot', content: reply, card })
+        } else if (card) {
+          updated.push({ role: 'bot', content: '', card })
+        } else {
           updated.push({ role: 'bot', content: '抱歉，我暂时无法理解，请换个方式描述您的需求。' })
         }
         return updated
       })
-
-      if (card) {
-        setActiveCard(card)
-        saveCard(card)
-      }
     } catch {
       setMessages((prev) => {
         const withoutThinking = prev.filter((m) => m.id !== thinkingId)
@@ -185,18 +223,28 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
     }
   }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
+  const handleClear = async () => {
+    if (clearing) return
+    setClearing(true)
+    try {
+      if (authToken) {
+        await clearChatHistory(authToken)
+      }
+    } catch {
+      // even if the request fails, reset local view
+    } finally {
+      setClearing(false)
     }
+    setMessages([WELCOME])
   }
 
-  const cardProps = {
-    authToken,
-    userId,
-    onUpdate: handleCardUpdate,
-    onSubmit: activeCard?.type === 'bounty' ? handleBountySubmit : handleCardSubmit,
-    onCancel: handleCardCancel,
+  const handleKeyDown = (e) => {
+    // Do not send while an IME composition is in progress (Chinese input).
+    if (e.nativeEvent?.isComposing || e.keyCode === 229) return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSend()
+    }
   }
 
   return (
@@ -212,18 +260,7 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
             </span>
           </div>
         </div>
-        <button className="chat-header-btn" onClick={() => {
-          setMessages([
-            {
-              role: 'bot',
-              content: '您好！我是 BS买卖助手，帮您搜索推荐 AI 技能商品，也能引导您上传发布。有什么需要？',
-              welcome: true,
-            },
-          ])
-          setActiveCard(null)
-          saveCard(null)
-          localStorage.removeItem(STORAGE_KEY_MSGS)
-        }} title="清除会话">
+        <button className="chat-header-btn" onClick={handleClear} disabled={clearing} title="清空对话">
           <RotateCcw size={16} />
         </button>
         <button className="chat-close-btn" onClick={onClose}>
@@ -232,30 +269,41 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
       </div>
 
       <div className="chat-messages">
-        {messages.map((msg, i) => (
-          <div key={msg.id || i} className={`chat-message ${msg.role}`}>
-            {msg.role === 'bot' && <div className="message-avatar"><img src="/logo.png" alt="BS" style={{ width: 24, height: 24, borderRadius: 6 }} /></div>}
-            <div className={`message-bubble ${msg.role} ${msg.thinking ? 'thinking' : ''}`}>
-              {msg.thinking ? (
-                <span>{msg.content}</span>
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-              )}
-              {msg.welcome && (
-                <WelcomeCard onAction={(value) => handleSend(value)} />
-              )}
+        {messages.map((msg, i) => {
+          const card = msg.card
+          const readOnly = !!card && (card.type === 'publish' || card.type === 'bounty')
+            && editableIndexByType[card.type] !== i && card.step === 'fill'
+            && !isDoneCard(card)
+          const cardProps = {
+            authToken,
+            userId,
+            onUpdate: (updatedCard) => handleCardUpdate(i, updatedCard),
+            onSubmit: card?.type === 'bounty' ? handleBountySubmit : handleCardSubmit,
+            onCancel: () => handleCardCancel(i),
+            readOnly,
+          }
+          return (
+            <div key={msg.id || i} className={`chat-message ${msg.role}`}>
+              {msg.role === 'bot' && <div className="message-avatar"><img src="/logo.png" alt="BS" style={{ width: 24, height: 24, borderRadius: 6 }} /></div>}
+              <div className={`message-bubble ${msg.role} ${msg.thinking ? 'thinking' : ''}`}>
+                {msg.thinking ? (
+                  <span>{msg.content}</span>
+                ) : (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                )}
+                {msg.welcome && (
+                  <WelcomeCard onAction={(value) => handleSend(value)} />
+                )}
+                {!msg.welcome && card && INTERACTIVE_CARD_TYPES.includes(card.type) && (
+                  <div style={{ marginTop: 10 }}>
+                    {renderCard(card, cardProps)}
+                  </div>
+                )}
+              </div>
+              {msg.role === 'user' && <div className="message-avatar">😊</div>}
             </div>
-            {msg.role === 'user' && <div className="message-avatar">😊</div>}
-          </div>
-        ))}
-        {activeCard && (
-          <div className="chat-message bot">
-            <div className="message-avatar"><img src="/logo.png" alt="BS" style={{ width: 24, height: 24, borderRadius: 6 }} /></div>
-            <div className="message-bubble bot">
-              {renderCard(activeCard, { card: activeCard, ...cardProps })}
-            </div>
-          </div>
-        )}
+          )
+        })}
         {loading && (
           <div className="chat-message bot">
             <div className="message-avatar"><img src="/logo.png" alt="BS" style={{ width: 24, height: 24, borderRadius: 6 }} /></div>
@@ -274,16 +322,16 @@ export default function ChatPanel({ open, onClose, userId, authToken }) {
           ref={inputRef}
           type="text"
           className="chat-input"
-          placeholder="输入您的问题..."
+          placeholder={authToken ? '输入您的问题...' : '请先登录后再和助手对话'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={loading}
+          disabled={loading || !authToken}
         />
         <button
           className="chat-send-btn"
           onClick={() => handleSend()}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !authToken}
         >
           <Send size={18} />
         </button>

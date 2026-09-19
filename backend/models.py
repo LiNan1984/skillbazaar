@@ -209,6 +209,70 @@ class CategoryFilter(BaseModel):
     page_size: int = 20
 
 
+# ---------- Profile Models ----------
+
+class ProfileResponse(BaseModel):
+    id: str
+    username: str
+    nickname: str
+    avatar: str
+    role: str
+    display_name: str
+    bio: str
+    location: Optional[str] = None
+    website_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    social_links: list = []
+    badges: list = []
+    verified: bool = False
+    industry: Optional[str] = None
+    interests: list = []
+    city: Optional[str] = None
+    followers_count: int = 0
+    following_count: int = 0
+    is_following: bool = False
+
+
+class ProfileUpdate(BaseModel):
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    website_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    social_links: Optional[list] = None
+    industry: Optional[str] = None
+    interests: Optional[list] = None
+    city: Optional[str] = None
+    language: Optional[str] = None
+
+
+class FollowResponse(BaseModel):
+    following_id: str
+    is_following: bool
+
+
+class UserProductResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    category: str
+    sub_category: Optional[str] = None
+    price: int
+    original_price: Optional[int] = None
+    seller_name: str
+    seller_avatar: Optional[str] = None
+    rating: float
+    downloads: int
+    sales: int
+    tags: str
+    source_platform: Optional[str] = None
+    github_url: Optional[str] = None
+    icon: Optional[str] = None
+    content_preview: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+
+
 # ---------- Skill Asset Models ----------
 
 class SkillType(str, Enum):
@@ -299,18 +363,6 @@ class AuthResponse(BaseModel):
     token: str
     coins: int = 10000
     role: str = "user"
-
-
-# ---------- Profile Models ----------
-
-class ProfileUpdate(BaseModel):
-    industry: Optional[str] = None
-    interests: Optional[list] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    city: Optional[str] = None
-    bio: Optional[str] = None
-    preferred_categories: Optional[list] = None
 
 
 # ---------- Wallet Models ----------

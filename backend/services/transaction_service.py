@@ -4,6 +4,7 @@ from models import TransactionResponse
 import database
 import services.user_service as user_service
 import services.product_service as product_service
+from services.notification_service import notify
 
 
 class InsufficientBalanceError(Exception):
@@ -60,6 +61,23 @@ async def buy_product(buyer_id: str, product_id: int) -> dict:
         "ref_id": str(product_id),
         "description": f"购买「{product['name']}」 -{price} 金币",
     })
+
+    # In-app notifications: buyer always; seller when the product maps to a real user
+    await notify(
+        buyer_id, "product_bought",
+        f"购买成功：{product['name']}",
+        f"您已成功购买「{product['name']}」，花费 {price} 金币，可在我的库中查看使用。",
+        {"product_id": product_id, "transaction_id": tx_id, "amount": price},
+    )
+    seller = await database.fetch_user_by_name(product.get("seller_name") or "")
+    if seller and seller["id"] != buyer_id:
+        await notify(
+            seller["id"], "product_sold",
+            f"您的商品被购买：{product['name']}",
+            f"买家 {user.get('nickname') or buyer_id} 购买了您的商品「{product['name']}」，售价 {price} 金币。",
+            {"product_id": product_id, "transaction_id": tx_id,
+             "buyer_id": buyer_id, "amount": price},
+        )
 
     return {
         "transaction_id": tx_id,

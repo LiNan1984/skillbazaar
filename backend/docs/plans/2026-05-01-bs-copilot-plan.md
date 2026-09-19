@@ -124,7 +124,7 @@ import re
 import httpx
 
 LLM_API_URL = "https://api.finmall.com/v1/chat/completions"
-LLM_API_KEY = "sk-bV3TVx9azStj8KJe3oW0rsqpaIZKX8E21wyXMtHYCjWBxly1"
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")  # rotated; inject via env
 LLM_MODEL = "GLM-5.1-FP8"
 
 INTENT_RULES = {
