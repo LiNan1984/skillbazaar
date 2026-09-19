@@ -34,6 +34,7 @@ Endpoint contracts assumed (implementer can adjust):
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import tempfile
 import unittest
@@ -66,6 +67,7 @@ async def _fetchall(sql: str, params=()):
         conn.row_factory = aiosqlite.Row
         cursor = await conn.execute(sql, params)
         rows = await cursor.fetchall()
+        await conn.commit()
         return [dict(r) for r in rows]
     finally:
         await conn.close()
@@ -1521,6 +1523,264 @@ class TestSmartPricing(_V4Base):
         self.assertGreaterEqual(body["price_range"]["max"], 200)
         # Verify market_avg reflects the competitor prices
         self.assertGreater(body["market_avg"], 0)
+
+
+# ---------------------------------------------------------------------------
+# v4.6 – New Product Traffic Boost
+# ---------------------------------------------------------------------------
+
+class TestTrafficBoost(_V4Base):
+    """Boost score system: new products get traffic boost, decay over time,
+    affects search ranking, seller stats dashboard, and cron decay."""
+
+    # ---- TB-01 ----
+    def test_boost_score_set_on_new_product(self):
+        """Publishing a new product automatically sets boost_score to 100."""
+        seller = self._register("tb01_seller", "卖家TB01")
+        prod = self._publish(seller["username"], "TB01 新品", price=50,
+                             category="Skill")
+
+        # Verify boost_score is set to 100 on creation
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        self.assertIsNotNone(row)
+        self.assertEqual(row["boost_score"], 100)
+
+    # ---- TB-02 ----
+    def test_boost_score_decays_over_time(self):
+        """Boost score decays approximately 14% per day over 7 days."""
+        seller = self._register("tb02_seller", "卖家TB02")
+        prod = self._publish(seller["username"], "TB02 商品", price=50,
+                             category="Skill")
+
+        # Verify initial boost
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        self.assertEqual(row["boost_score"], 100)
+
+        # Simulate 3 days passing by updating created_at
+        new_date = (
+            datetime.datetime.now() - datetime.timedelta(days=3)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE products SET created_at = ? WHERE id = ?",
+            (new_date, prod["id"]),
+        ))
+
+        # Run the boost decay cron
+        r = self.client.post("/api/v4/cron/decay-boost")
+        self.assertEqual(r.status_code, 200, r.text)
+
+        # After 3 days, boost should have decayed (100 * 0.86^3 ≈ 64)
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        # 14% decay per day for 3 days: 100 * (1 - 0.14)^3 ≈ 63.9
+        self.assertLess(row["boost_score"], 100)
+        self.assertGreater(row["boost_score"], 50)
+
+    # ---- TB-03 ----
+    def test_boost_affects_search_ranking(self):
+        """Products with boost score rank higher in search results."""
+        seller = self._register("tb03_seller", "卖家TB03")
+        # Create a boosted product (new)
+        boosted = self._publish(
+            seller["username"], "TB03 新品", price=50,
+            category="Skill", content="新品 boosted",
+        )
+        # Create an older product without boost
+        old_prod = self._publish(
+            seller["username"], "TB03 旧品", price=50,
+            category="Skill", content="旧品 无boost",
+        )
+
+        # Simulate old product being 8 days old (boost decayed to 0)
+        old_date = (
+            datetime.datetime.now() - datetime.timedelta(days=8)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE products SET created_at = ?, boost_score = 0 WHERE id = ?",
+            (old_date, old_prod["id"]),
+        ))
+
+        # Search for "TB03" - boosted product should appear first
+        r = self.client.post(
+            "/api/v4/search",
+            json={"query": "TB03", "filters": {}},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        results = r.json()["results"]
+
+        # Find positions of our products
+        names = [p["name"] for p in results]
+        boosted_idx = names.index("TB03 新品") if "TB03 新品" in names else -1
+        old_idx = names.index("TB03 旧品") if "TB03 旧品" in names else -1
+
+        self.assertNotEqual(
+            boosted_idx, -1, "Boosted product should be in results",
+        )
+        self.assertNotEqual(
+            old_idx, -1, "Old product should be in results",
+        )
+        self.assertLess(
+            boosted_idx, old_idx,
+            "Boosted product should rank higher than non-boosted",
+        )
+
+    # ---- TB-04 ----
+    def test_seller_stats_returns_aggregated_metrics(self):
+        """Seller stats endpoint returns total_views, total_downloads,
+        total_sales, total_revenue, and top_products."""
+        seller = self._register("tb04_seller", "卖家TB04")
+        p1 = self._publish(seller["username"], "TB04 A", price=100,
+                           category="Skill")
+        p2 = self._publish(seller["username"], "TB04 B", price=200,
+                           category="Skill")
+
+        # Simulate purchases for p1
+        buyer1 = self._register("tb04_buyer1", "买家TB04-1")
+        self._buy(buyer1, p1["id"])
+        buyer2 = self._register("tb04_buyer2", "买家TB04-2")
+        self._buy(buyer2, p1["id"])
+
+        r = self.client.get(
+            "/api/v4/seller/stats",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("total_views", body)
+        self.assertIn("total_downloads", body)
+        self.assertIn("total_sales", body)
+        self.assertIn("total_revenue", body)
+        self.assertIn("top_products", body)
+        # 2 sales of p1 = 2 * 100 = 200 revenue
+        self.assertGreaterEqual(body["total_sales"], 2)
+        self.assertGreaterEqual(body["total_revenue"], 200)
+
+    # ---- TB-05 ----
+    def test_seller_stats_top_products_sorted_by_views(self):
+        """Seller stats top_products are sorted by view count (descending)."""
+        seller = self._register("tb05_seller", "卖家TB05")
+        p1 = self._publish(seller["username"], "TB05 A", price=50,
+                           category="Skill")
+        p2 = self._publish(seller["username"], "TB05 B", price=50,
+                           category="Skill")
+        p3 = self._publish(seller["username"], "TB05 C", price=50,
+                           category="Skill")
+
+        # Simulate different view counts by inserting analytics records
+        today = "2025-01-10"
+        asyncio.run(_fetchall(
+            "INSERT INTO product_analytics (product_id, date, views) VALUES (?, ?, ?)",
+            (p1["id"], today, 100),
+        ))
+        asyncio.run(_fetchall(
+            "INSERT INTO product_analytics (product_id, date, views) VALUES (?, ?, ?)",
+            (p2["id"], today, 50),
+        ))
+        asyncio.run(_fetchall(
+            "INSERT INTO product_analytics (product_id, date, views) VALUES (?, ?, ?)",
+            (p3["id"], today, 200),
+        ))
+
+        r = self.client.get(
+            "/api/v4/seller/stats",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        top_products = r.json()["top_products"]
+
+        self.assertEqual(len(top_products), 3)
+        # Should be sorted by views descending: p3 (200), p1 (100), p2 (50)
+        self.assertEqual(top_products[0]["product_id"], p3["id"])
+        self.assertEqual(top_products[0]["views"], 200)
+        self.assertEqual(top_products[1]["product_id"], p1["id"])
+        self.assertEqual(top_products[1]["views"], 100)
+        self.assertEqual(top_products[2]["product_id"], p2["id"])
+        self.assertEqual(top_products[2]["views"], 50)
+
+    # ---- TB-06 ----
+    def test_cron_decay_reduces_boost(self):
+        """Calling the cron decay endpoint reduces boost_score for products
+        that are within the 7-day boost period."""
+        seller = self._register("tb06_seller", "卖家TB06")
+        prod = self._publish(seller["username"], "TB06 商品", price=50,
+                             category="Skill")
+
+        # Ensure boost is at 100
+        asyncio.run(_fetchall(
+            "UPDATE products SET boost_score = 100 WHERE id = ?", (prod["id"],)
+        ))
+
+        # Run cron decay
+        r = self.client.post("/api/v4/cron/decay-boost")
+        self.assertEqual(r.status_code, 200, r.text)
+
+        # Boost should have decreased (100 * 0.86 ≈ 86)
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        self.assertLess(row["boost_score"], 100)
+        self.assertGreater(row["boost_score"], 0)
+
+    # ---- TB-07 ----
+    def test_cron_decay_removes_boost_after_period(self):
+        """After 7+ days, cron decay sets boost_score to 0."""
+        seller = self._register("tb07_seller", "卖家TB07")
+        prod = self._publish(seller["username"], "TB07 旧商品", price=50,
+                             category="Skill")
+
+        # Set boost to 100
+        asyncio.run(_fetchall(
+            "UPDATE products SET boost_score = 100 WHERE id = ?", (prod["id"],)
+        ))
+
+        # Simulate 8 days passing
+        old_date = (
+            datetime.datetime.now() - datetime.timedelta(days=8)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "UPDATE products SET created_at = ? WHERE id = ?",
+            (old_date, prod["id"]),
+        ))
+
+        # Run cron decay
+        r = self.client.post("/api/v4/cron/decay-boost")
+        self.assertEqual(r.status_code, 200, r.text)
+
+        # Boost should be 0 after 7+ days
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        self.assertEqual(row["boost_score"], 0)
+
+    # ---- TB-08 ----
+    def test_boost_reset_on_republish(self):
+        """Republishing a product resets its boost_score to 100."""
+        seller = self._register("tb08_seller", "卖家TB08")
+        prod = self._publish(seller["username"], "TB08 商品", price=50,
+                             category="Skill")
+
+        # Reduce boost via decay simulation
+        asyncio.run(_fetchall(
+            "UPDATE products SET boost_score = 50 WHERE id = ?", (prod["id"],)
+        ))
+
+        # Republish the product
+        r = self.client.post(
+            f"/api/v4/products/{prod['id']}/republish",
+            headers=_auth(seller["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+
+        # Verify boost is reset to 100
+        row = asyncio.run(_fetchone(
+            "SELECT boost_score FROM products WHERE id = ?", (prod["id"],)
+        ))
+        self.assertEqual(row["boost_score"], 100)
 
 
 if __name__ == "__main__":

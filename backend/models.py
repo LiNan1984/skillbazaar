@@ -1059,3 +1059,38 @@ class PricingTrendResponse(BaseModel):
     price_trend: str
     sample_count: int
     period_days: int
+
+
+# ===========================================================================
+# v4.6 – Traffic Boost
+# ===========================================================================
+
+
+class ProductStatsItem(BaseModel):
+    product_id: int
+    product_name: str = ""
+    views: int = 0
+    purchases: int = 0
+    revenue_cents: int = 0
+    boost_score: int = 0
+
+
+class SellerStatsResponse(BaseModel):
+    seller_id: str
+    total_products: int
+    total_views: int
+    total_downloads: int = 0
+    total_sales: int = 0
+    total_revenue: int = 0
+    avg_conversion_rate: float
+    top_products: list[ProductStatsItem] = []
+
+
+class BoostDecayResponse(BaseModel):
+    decayed_count: int = 0
+    reset_count: int = 0
+
+
+class BoostResetResponse(BaseModel):
+    product_id: int
+    boost_score: int

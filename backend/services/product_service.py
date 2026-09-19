@@ -52,12 +52,30 @@ async def get_products(
         page=page,
         page_size=page_size,
     )
+    products = [dict(p) for p in products]
+    for p in products:
+        p["tags"] = _normalize_tags(p.get("tags"))
     return ProductList(
         total=total,
         page=page,
         page_size=page_size,
         products=[ProductResponse(**p) for p in products],
     )
+
+
+def _normalize_tags(tags):
+    if not tags:
+        return "[]"
+    if isinstance(tags, list):
+        return json.dumps(tags, ensure_ascii=False)
+    if isinstance(tags, str):
+        tags = tags.strip()
+        if tags.startswith('['):
+            return tags
+        if tags.startswith('{'):
+            return tags
+        return json.dumps([t.strip() for t in tags.split(',') if t.strip()], ensure_ascii=False)
+    return json.dumps(list(tags), ensure_ascii=False)
 
 
 async def get_product_by_id(product_id: int) -> ProductResponse | None:
@@ -67,14 +85,18 @@ async def get_product_by_id(product_id: int) -> ProductResponse | None:
     # Derive compat if not set (read-side derivation, no DB write)
     if not product.get("compat"):
         product["compat"] = json.dumps(derive_compat(product), ensure_ascii=False)
+    product["tags"] = _normalize_tags(product.get("tags"))
     return ProductResponse(**product)
 
 
 async def create_product(data: dict) -> ProductResponse:
     product_id = await database.insert_product(data)
+    # Set boost_score=100 for new products (v4.6 traffic boost)
+    await database.update_product_boost_score(product_id, 100)
     product = await database.fetch_product_by_id(product_id)
     if product and not product.get("compat"):
         product["compat"] = json.dumps(derive_compat(product), ensure_ascii=False)
+    product["tags"] = _normalize_tags(product.get("tags"))
     return ProductResponse(**product)
 
 

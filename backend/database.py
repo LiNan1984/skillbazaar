@@ -48,7 +48,8 @@ async def _create_tables(db: aiosqlite.Connection):
             content_preview TEXT,
             compat TEXT,  -- JSON array of runtime compat strings, NULL if not set
             status TEXT DEFAULT 'active',
-            created_at TEXT
+            created_at TEXT,
+            boost_score INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS users (
@@ -1079,6 +1080,10 @@ async def _seed_products(db: aiosqlite.Connection):
         await db.execute("ALTER TABLE users ADD COLUMN sandbox_quota INTEGER DEFAULT 3600")
     except Exception:
         pass
+    try:
+        await db.execute("ALTER TABLE products ADD COLUMN boost_score INTEGER DEFAULT 0")
+    except Exception:
+        pass
     await db.commit()
 
 
@@ -1132,6 +1137,9 @@ async def fetch_products(
             "newest": "created_at DESC",
         }
         order = allowed_sorts.get(sort_by, "downloads DESC")
+        # Boost-aware ranking: add boost_score as tiebreaker
+        if "boost_score" not in order:
+            order = f"{order}, COALESCE(boost_score, 0) DESC"
 
         count_sql = f"SELECT COUNT(*) FROM products WHERE {where}"
         cursor = await db.execute(count_sql, params)
@@ -1869,6 +1877,18 @@ async def update_product_pricing_model(product_id: int, model: str) -> bool:
     try:
         cursor = await db.execute(
             "UPDATE products SET pricing_model = ? WHERE id = ?", (model, product_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def update_product_boost_score(product_id: int, boost_score: int) -> bool:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE products SET boost_score = ? WHERE id = ?", (boost_score, product_id),
         )
         await db.commit()
         return cursor.rowcount > 0
@@ -3876,7 +3896,7 @@ async def search_products(query: str = "", category: str = None,
             where.append("p.price <= ?")
             params.append(max_price)
 
-        sql = f"SELECT * FROM products p WHERE {' AND '.join(where)} ORDER BY p.created_at DESC LIMIT ? OFFSET ?"
+        sql = f"SELECT * FROM products p WHERE {' AND '.join(where)} ORDER BY p.boost_score DESC, p.created_at DESC LIMIT ? OFFSET ?"
         cursor = await db.execute(sql, params + [page_size, offset])
         rows = await cursor.fetchall()
         results = [dict(r) for r in rows]
