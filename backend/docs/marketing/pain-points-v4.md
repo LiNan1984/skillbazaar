@@ -2,7 +2,7 @@
 
 > **文档用途**: GTM 策略、产品定位、营销话术、功能路线图参考
 > **撰写日期**: 2026-09-19
-> **版本**: v4.1（v4.0 基线 + v4.1 实现进度）
+> **版本**: v4.2（v4.0 基线 + v4.1 + v4.2 实现进度）
 
 ---
 
@@ -474,7 +474,8 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | Skill Versioning | v4.1.1 | ✅ 完成 | 12/12 通过 | 5e0abfd |
 | Seller Analytics | v4.2.0 | ✅ 完成 | 7/7 通过 | 17d3132 |
 | - 销售数据看板（总览/产品/导出） | | | | |
-| Payment Integration | v4.2.0 | 🔄 进行中 | - | - |
+| Payment Integration | v4.2.0 | ✅ 完成 | 9/9 通过 | c9b4ba4 |
+| - 支付订单、回调、提现、历史、支付方式管理 | | | | |
 
 ### 计划中功能 📋
 
@@ -487,9 +488,9 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ### 迭代统计
 
-- **迭代次数**: 3+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → ...）
-- **测试覆盖率**: 111/139 (79.9%)
-- **代码提交**: 5 次（feat: user profiles v4, test: baseline, feat: skill versioning, feat: seller analytics, test: payment integration）
+- **迭代次数**: 5+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Seller Analytics → v4.2.0 Payment Integration）
+- **测试覆盖率**: 113/137 (82.5%)
+- **代码提交**: 6 次（feat: user profiles v4, feat: skill versioning v4, feat: seller analytics v4, feat: payment integration, test: analytics, test: payment integration）
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
