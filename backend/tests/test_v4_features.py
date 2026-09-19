@@ -92,6 +92,7 @@ class _V4Base(unittest.TestCase):
                             "wishlist_items", "affiliate_conversions",
                             "affiliate_clicks", "affiliate_links",
                             "subscriptions", "subscription_events",
+                            "trial_runs",
                             "products", "product_embeddings"):
                     try:
                         await conn.execute(f"DELETE FROM {tbl}")
@@ -2566,6 +2567,283 @@ class TestEvalBadge(_V4Base):
         self.assertEqual(len(scores), 3)
         self.assertGreaterEqual(scores[0], scores[1])
         self.assertGreaterEqual(scores[1], scores[2])
+
+
+# ===========================================================================
+# v4.9 – One-Click Trial Run  (TR-01 … TR-08)
+# ===========================================================================
+
+class TestTrialRun(_V4Base):
+    """One-click trial execution: run, eligibility, history, limits, token cap,
+    and cron cleanup."""
+
+    def _db_trial_runs(self, user_id: str = None, product_id: int = None) -> list[dict]:
+        if user_id and product_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM trial_runs WHERE user_id = ? AND product_id = ?",
+                (user_id, product_id),
+            ))
+        if user_id:
+            return asyncio.run(_fetchall(
+                "SELECT * FROM trial_runs WHERE user_id = ?", (user_id,),
+            ))
+        return asyncio.run(_fetchall("SELECT * FROM trial_runs"))
+
+    # ---- TR-01 ----
+    def test_run_trial_success(self):
+        """POST /api/v4/trial/run executes a trial and returns the full
+        TrialRunResponse including trial_id, status, output, tokens, and timing."""
+        user = self._register("tr01_user", "用户TR01")
+        product = self._publish(user["username"], "TR01 试用商品", price=50,
+                                category="Skill", content="skill content")
+
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"], "input_text": "分析这个数据: [1, 2, 3]"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        # Verify response fields match TrialRunResponse model
+        self.assertIn("trial_id", body)
+        self.assertIsInstance(body["trial_id"], int)
+        self.assertEqual(body["product_id"], product["id"])
+        self.assertEqual(body["product_name"], "TR01 试用商品")
+        self.assertIn(body["status"], ("completed", "failed", "running", "timeout"))
+        self.assertIn("output_text", body)
+        self.assertIn("tokens_used", body)
+        self.assertIsInstance(body["tokens_used"], int)
+        self.assertGreaterEqual(body["tokens_used"], 0)
+        self.assertIn("execution_time_ms", body)
+        self.assertIsInstance(body["execution_time_ms"], int)
+        self.assertGreaterEqual(body["execution_time_ms"], 0)
+        self.assertIn("created_at", body)
+
+    # ---- TR-02 ----
+    def test_cannot_trial_purchased_product(self):
+        """Users who have purchased a product cannot run a trial for it."""
+        user = self._register("tr02_user", "用户TR02")
+        product = self._publish(user["username"], "TR02 已购商品", price=50,
+                                category="Skill")
+
+        # Purchase the product first
+        buy_r = self.client.post(
+            "/api/transactions/buy",
+            json={"product_id": product["id"]},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(buy_r.status_code, 200, buy_r.text)
+
+        # Attempt trial — should be rejected
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"], "input_text": "test"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+        self.assertIn("已购买", body["error"])
+
+    # ---- TR-03 ----
+    def test_trial_limit_enforced(self):
+        """Each user gets a maximum of 3 trials per product; the 4th attempt
+        is rejected with an appropriate error."""
+        user = self._register("tr03_user", "用户TR03")
+        product = self._publish(user["username"], "TR03 限次商品", price=50,
+                                category="Skill")
+
+        # Run 3 successful trials
+        for i in range(3):
+            r = self.client.post(
+                "/api/v4/trial/run",
+                json={"product_id": product["id"],
+                      "input_text": f"试用输入 {i}"},
+                headers=_auth(user["token"]),
+            )
+            self.assertEqual(r.status_code, 200, r.text)
+
+        # 4th trial should be rejected
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"], "input_text": "超出限制"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        body = r.json()
+        self.assertIn("error", body)
+        self.assertIn("试用次数", body["error"])
+
+        # Verify only 3 trial records exist in DB
+        rows = self._db_trial_runs(user["id"], product["id"])
+        self.assertEqual(len(rows), 3)
+
+    # ---- TR-04 ----
+    def test_get_trial_history(self):
+        """GET /api/v4/trial/my returns all of the user's trial runs with
+        product metadata, optionally filtered by product_id."""
+        user = self._register("tr04_user", "用户TR04")
+        p1 = self._publish(user["username"], "TR04 商品A", price=50,
+                           category="Skill", content="skill A")
+        p2 = self._publish(user["username"], "TR04 商品B", price=80,
+                           category="Agent", content="agent B")
+
+        # Run trials on both products
+        for pid, label in ((p1["id"], "A"), (p2["id"], "B")):
+            for i in range(2):
+                self.client.post(
+                    "/api/v4/trial/run",
+                    json={"product_id": pid,
+                          "input_text": f"TR04 输入{i}-{label}"},
+                    headers=_auth(user["token"]),
+                )
+
+        # GET all history
+        r = self.client.get("/api/v4/trial/my", headers=_auth(user["token"]))
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("trials", body)
+        self.assertEqual(len(body["trials"]), 4)
+        for trial in body["trials"]:
+            self.assertIn("trial_id", trial)
+            self.assertIn("product_id", trial)
+            self.assertIn("product_name", trial)
+            self.assertIn("status", trial)
+            self.assertIn("tokens_used", trial)
+            self.assertIn("created_at", trial)
+
+    # ---- TR-05 ----
+    def test_can_trial_eligible(self):
+        """GET /api/v4/trial/can-trial returns can_trial=true with
+        trials_remaining count for a product the user has not purchased."""
+        user = self._register("tr05_user", "用户TR05")
+        product = self._publish(user["username"], "TR05 可试用商品", price=50,
+                                category="Skill")
+
+        # Before any trials: can_trial=true, trials_remaining=3
+        r = self.client.get(
+            f"/api/v4/trial/can-trial?product_id={product['id']}",
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("can_trial", body)
+        self.assertIn("reason", body)
+        self.assertIn("trials_remaining", body)
+        self.assertTrue(body["can_trial"])
+        self.assertIsNone(body["reason"])
+        self.assertEqual(body["trials_remaining"], 3)
+
+        # Run one trial, then check again
+        self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"], "input_text": "第一次试用"},
+            headers=_auth(user["token"]),
+        )
+
+        r2 = self.client.get(
+            f"/api/v4/trial/can-trial?product_id={product['id']}",
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        body2 = r2.json()
+        self.assertTrue(body2["can_trial"])
+        self.assertEqual(body2["trials_remaining"], 2)
+
+    # ---- TR-06 ----
+    def test_trial_token_limit(self):
+        """Trial output is capped at 512 tokens regardless of model output
+        length; tokens_used in response should never exceed 512."""
+        user = self._register("tr06_user", "用户TR06")
+        product = self._publish(user["username"], "TR06 长输出商品", price=50,
+                                category="Skill")
+
+        # Use a very long input that would naturally produce >512 tokens of output
+        long_input = "分析以下大量数据: " + ", ".join(str(i) for i in range(2000))
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"], "input_text": long_input},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertLessEqual(body["tokens_used"], 512,
+                             "Token usage must be capped at 512")
+        self.assertIn("output_text", body)
+        # Output should be truncated when approaching the cap
+        self.assertIsNotNone(body["output_text"])
+
+    # ---- TR-07 ----
+    def test_cron_cleanup_old_trials(self):
+        """POST /api/v4/cron/cleanup-trials deletes trial_run records older
+        than 30 days and returns the count of deleted records."""
+        # Seed a product and an old trial record directly in the DB
+        seller = self._register("tr07_seller", "卖家TR07")
+        product = self._publish(seller["username"], "TR07 旧试用商品", price=50,
+                                category="Skill")
+
+        # Insert a trial record with an old created_at date directly
+        old_date = (
+            datetime.datetime.now() - datetime.timedelta(days=60)
+        ).isoformat()
+        asyncio.run(_fetchall(
+            "INSERT INTO trial_runs "
+            "(user_id, product_id, status, input_text, output_text, "
+            "tokens_used, execution_time_ms, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (seller["id"], product["id"], "completed", "旧输入", "旧输出",
+             100, 500, old_date),
+        ))
+
+        # Verify the old record exists
+        rows_before = self._db_trial_runs()
+        self.assertGreaterEqual(len(rows_before), 1)
+
+        # Run cleanup cron
+        r = self.client.post("/api/v4/cron/cleanup-trials")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("deleted_count", body)
+        self.assertIn("message", body)
+        self.assertGreaterEqual(body["deleted_count"], 1)
+
+        # Verify the old record was removed
+        rows_after = self._db_trial_runs()
+        self.assertEqual(len(rows_after), 0)
+
+    # ---- TR-08 ----
+    def test_trial_creates_record(self):
+        """Executing a trial persists a trial_runs row in the database with
+        correct user_id, product_id, status, and timestamps."""
+        user = self._register("tr08_user", "用户TR08")
+        product = self._publish(user["username"], "TR08 入库测试商品", price=50,
+                                category="Skill", content="content")
+
+        # Confirm no trial records exist yet
+        rows_before = self._db_trial_runs(user["id"])
+        self.assertEqual(len(rows_before), 0)
+
+        r = self.client.post(
+            "/api/v4/trial/run",
+            json={"product_id": product["id"],
+                  "input_text": "TR08 验证输入"},
+            headers=_auth(user["token"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        trial = r.json()
+        trial_id = trial["trial_id"]
+
+        # Verify the trial_runs row exists in DB
+        rows = self._db_trial_runs(user["id"], product["id"])
+        self.assertEqual(len(rows), 1)
+        record = rows[0]
+        self.assertEqual(record["user_id"], user["id"])
+        self.assertEqual(record["product_id"], product["id"])
+        self.assertEqual(record["status"], "completed")
+        self.assertEqual(record["input_text"], "TR08 验证输入")
+        self.assertEqual(record["trial_id"], trial_id)
+        self.assertIn("created_at", record)
+        self.assertIsNotNone(record["created_at"])
 
 
 if __name__ == "__main__":

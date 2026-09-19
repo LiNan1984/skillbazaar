@@ -2,7 +2,7 @@
 
 > **文档用途**: GTM 策略、产品定位、营销话术、功能路线图参考
 > **撰写日期**: 2026-09-19
-> **版本**: v4.7（v4.0 基线 + v4.1 + v4.2 + v4.3 + v4.4 + v4.5 + v4.6 + v4.7 实现进度）
+> **版本**: v4.9（v4.0 基线 + v4.1 + v4.2 + v4.3 + v4.4 + v4.5 + v4.6 + v4.7 + v4.8 + v4.9 实现进度）
 
 ---
 
@@ -412,7 +412,7 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 ### P0 — 立即做（直接影响转化）
 
 1. ~~**搜索结果展示 eval_score 徽章**~~ ✅ v4.8 完成
-2. **商品详情页增加一键试运行** — 降低购买决策门槛
+2. **商品详情页增加一键试运行** — 降低购买决策门槛 🔄 v4.9 开发中
 3. **卖家数据面板 MVP** — 基础数据（曝光/下载/收入）
 
 ### P1 — 近期做（提升体验和留存）
@@ -422,7 +422,7 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 6. ~~**新品流量扶持**~~ ✅ v4.6 完成
 7. ~~**Skill 版本管理**~~ ✅ v4.1.1 完成
 8. ~~**搜索结果展示 eval_score 徽章**~~ ✅ v4.8 完成
-9. **商品详情页增加一键试运行** — 降低购买决策门槛
+9. **商品详情页增加一键试运行** — 降低购买决策门槛 🔄 v4.9 开发中
 10. **卖家数据面板 MVP** — 基础数据（曝光/下载/收入）
 
 ### P2 — 中期做（构建壁垒）
@@ -577,19 +577,32 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - 颜色分级 (A+/B+/C+/D) | | | | |
 | - 按评估分数筛选和排序 | | | | |
 
+### v4.9 迭代进度追踪
+
+#### 进行中功能 🔄
+
+| 功能 | 版本 | 优先级 | 状态 |
+|------|------|--------|------|
+| **One-Click Trial Run** | v4.9.0 | P1 | 🔄 开发中 |
+| - 一键试运行按钮 | | | |
+| - Trial 执行 API | | | |
+| - Trial 限制 (3次/商品) | | | |
+| - Token 输出上限 (512) | | | |
+| - Trial 历史记录 | | | |
+| - Cron 清理旧记录 | | | |
+
 ### v4.9+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
-| One-Click Trial Run | v4.9.0 | P1 |
 | Comparison Tool | v4.9.0 | P2 |
 | Mobile/PWA | v4.10.0 | P2 |
 
 ### 迭代统计
 
-- **迭代次数**: 13+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription → v4.8.0 Eval Score Badges）
-- **测试覆盖率**: 189/189 (100%)
-- **代码提交**: 11 次
+- **迭代次数**: 14+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search → v4.5.1 Smart Pricing → v4.6.0 Traffic Boost → v4.7.0 Skill Subscription → v4.8.0 Eval Score Badges → v4.9.0 One-Click Trial Run）
+- **测试覆盖率**: 189/189 (100%) → 目标 197/197
+- **代码提交**: 11 次 → 目标 12 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 
 ---
