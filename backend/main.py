@@ -25,6 +25,7 @@ from routers.wishlist_v4 import router as wishlist_v4_router
 from routers.recommendations_v4 import router as recommendations_v4_router
 from routers.affiliate_v4 import router as affiliate_v4_router
 from routers.semantic_search_v4 import router as semantic_search_v4_router
+from routers.pricing_v4 import router as pricing_v4_router
 
 
 @asynccontextmanager
@@ -73,6 +74,7 @@ app.include_router(wishlist_v4_router)
 app.include_router(recommendations_v4_router)
 app.include_router(affiliate_v4_router)
 app.include_router(semantic_search_v4_router)
+app.include_router(pricing_v4_router)
 
 
 @app.get("/")

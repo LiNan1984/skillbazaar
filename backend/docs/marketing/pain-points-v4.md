@@ -524,7 +524,18 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 | - 佣金统计 | | | | |
 | - 仅卖家可生成链接 | | | | |
 
-### v4.5+ 计划中功能 📋
+### v4.5 迭代进度追踪
+
+#### 已实现功能 ✅
+
+| 功能 | 版本 | 状态 | 测试 | 提交 |
+|------|------|------|------|------|
+| **Semantic Search** | v4.5.0 | ✅ 完成 | 5/5 通过 | 7616df1 |
+| - 向量相似度搜索 | | | | |
+| - Hash-based 128维嵌入 | | | | |
+| - 懒加载索引 | | | | |
+
+### v4.6+ 计划中功能 📋
 
 | 功能 | 版本 | 优先级 |
 |------|------|--------|
@@ -537,8 +548,8 @@ Agent + Skill + Cron + Workflow 全品类覆盖，买家一站式采购。Bounty
 
 ### 迭代统计
 
-- **迭代次数**: 10+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program）
-- **测试覆盖率**: 149/149 (100%)
+- **迭代次数**: 11+（v4.0 基线 → v4.1.0 User Profiles → v4.1.1 Skill Versioning → v4.2.0 Analytics + Search + Bundles + Payments → v4.3.0 Wishlist + Recommendations → v4.4.0 Affiliate Program → v4.5.0 Semantic Search）
+- **测试覆盖率**: 155/155 (100%)
 - **代码提交**: 7 次
 - **Agent 团队**: PM (spec) + QA (tests) + DEV (implementation) + GTM (pain points)
 

@@ -1025,3 +1025,37 @@ class SemanticSearchRequest(BaseModel):
 
 class SemanticSearchResponse(BaseModel):
     results: list[dict]
+
+
+# ===========================================================================
+# v4.5.1 – Smart Pricing Suggestions
+# ===========================================================================
+
+
+class PriceRange(BaseModel):
+    min: int
+    max: int
+
+
+class PricingSuggestRequest(BaseModel):
+    product_id: Optional[int] = None
+    category: Optional[str] = None
+
+
+class PricingSuggestionResponse(BaseModel):
+    suggested_price: int
+    price_range: PriceRange
+    reason: str
+    market_avg: float
+    competitors_count: int
+    confidence: Optional[str] = None
+
+
+class PricingTrendResponse(BaseModel):
+    category: str
+    avg_price: float
+    min_price: int
+    max_price: int
+    price_trend: str
+    sample_count: int
+    period_days: int

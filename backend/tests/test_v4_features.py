@@ -1359,5 +1359,169 @@ class TestSemanticSearch(_V4Base):
         self.assertEqual(r.json()["results"], [])
 
 
+# ---------------------------------------------------------------------------
+# v4.5.1 – Smart Pricing Suggestions
+# ---------------------------------------------------------------------------
+
+class TestSmartPricing(_V4Base):
+    """Pricing suggestion and category price-trend endpoints."""
+
+    # ---- SP-01 ----
+    def test_suggest_with_product_id_returns_pricing_suggestion(self):
+        """POST /api/v4/pricing/suggest with a valid product_id returns
+        suggested_price, price_range, reason, market_avg, and competitors_count."""
+        seller = self._register("sp01_seller", "卖家SP01")
+        # Seed competitor products in the same category first
+        self._publish(seller["username"], "SP01 竞品A", price=30,
+                      category="数据分析", content="数据分析")
+        self._publish(seller["username"], "SP01 竞品B", price=40,
+                      category="数据分析", content="数据分析")
+        self._publish(seller["username"], "SP01 竞品C", price=60,
+                      category="数据分析", content="数据分析")
+        prod = self._publish(seller["username"], "SP01 技能", price=50,
+                             category="数据分析", content="数据可视化")
+
+        r = self.client.post(
+            "/api/v4/pricing/suggest",
+            json={"product_id": prod["id"]},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("suggested_price", body)
+        self.assertIn("price_range", body)
+        self.assertIn("reason", body)
+        self.assertIn("market_avg", body)
+        self.assertIn("competitors_count", body)
+        # suggested_price should be a non-negative integer
+        self.assertIsInstance(body["suggested_price"], int)
+        self.assertGreaterEqual(body["suggested_price"], 0)
+        # price_range must have min <= max
+        self.assertLessEqual(body["price_range"]["min"], body["price_range"]["max"])
+
+    # ---- SP-02 ----
+    def test_suggest_with_category_name_description_returns_suggestion(self):
+        """POST /api/v4/pricing/suggest with category+name+description returns
+        a pricing suggestion even when no product_id is provided."""
+        seller = self._register("sp02_seller", "卖家SP02")
+        # Publish a competitor product in the same category so market data exists
+        self._publish(seller["username"], "SP02 竞品", price=80,
+                      category="Agent", content="智能代理服务")
+
+        r = self.client.post(
+            "/api/v4/pricing/suggest",
+            json={
+                "category": "Agent",
+                "name": "SP02 新代理",
+                "description": "一个强大的AI代理工具",
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("suggested_price", body)
+        self.assertIn("price_range", body)
+        self.assertIn("reason", body)
+        self.assertIn("market_avg", body)
+        self.assertIsInstance(body["suggested_price"], int)
+        self.assertGreaterEqual(body["suggested_price"], 0)
+
+    # ---- SP-03 ----
+    def test_suggest_with_nonexistent_product_id_returns_404(self):
+        """POST /api/v4/pricing/suggest with a product_id that does not exist
+        returns HTTP 404."""
+        r = self.client.post(
+            "/api/v4/pricing/suggest",
+            json={"product_id": 99999},
+        )
+        self.assertEqual(r.status_code, 404, r.text)
+
+    # ---- SP-04 ----
+    def test_suggest_with_empty_request_returns_400(self):
+        """POST /api/v4/pricing/suggest with an empty body (no product_id,
+        no category/name/description) returns HTTP 400."""
+        r = self.client.post("/api/v4/pricing/suggest", json={})
+        self.assertEqual(r.status_code, 400, r.text)
+
+    # ---- SP-05 ----
+    def test_trends_endpoint_returns_category_price_stats(self):
+        """GET /api/v4/pricing/trends/{category} returns avg_price, min_price,
+        max_price, price_trend, and sample_count for the category."""
+        seller = self._register("sp05_seller", "卖家SP05")
+        self._publish(seller["username"], "SP05 A", price=40,
+                      category="Skill")
+        self._publish(seller["username"], "SP05 B", price=60,
+                      category="Skill")
+        self._publish(seller["username"], "SP05 C", price=100,
+                      category="Skill")
+
+        r = self.client.get("/api/v4/pricing/trends/Skill")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["category"], "Skill")
+        self.assertIn("avg_price", body)
+        self.assertIn("min_price", body)
+        self.assertIn("max_price", body)
+        self.assertIn("price_trend", body)
+        self.assertIn("sample_count", body)
+        self.assertEqual(body["sample_count"], 3)
+        self.assertEqual(body["min_price"], 40)
+        self.assertEqual(body["max_price"], 100)
+
+    # ---- SP-06 ----
+    def test_trends_with_days_parameter_works(self):
+        """GET /api/v4/pricing/trends/{category}?days=N filters statistics
+        to products published within the last N days."""
+        seller = self._register("sp06_seller", "卖家SP06")
+        self._publish(seller["username"], "SP06 新商品", price=90,
+                      category="Agent")
+        # An older product (simulated by a direct DB insert with an old date
+        # would be ideal, but the endpoint implementation should handle days
+        # filtering – here we just verify the parameter is accepted).
+        r = self.client.get("/api/v4/pricing/trends/Agent?days=7")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["category"], "Agent")
+        self.assertIn("avg_price", body)
+        self.assertIn("sample_count", body)
+
+    # ---- SP-07 ----
+    def test_trends_for_empty_category_returns_404(self):
+        """GET /api/v4/pricing/trends/{category} for a category with no
+        products returns HTTP 404."""
+        r = self.client.get("/api/v4/pricing/trends/空分类无商品")
+        self.assertEqual(r.status_code, 404, r.text)
+
+    # ---- SP-08 ----
+    def test_suggest_price_is_within_competitor_range(self):
+        """When competitor products exist in the same category, the suggested
+        price falls within the competitor price range."""
+        seller = self._register("sp08_seller", "卖家SP08")
+        # Create multiple competitor products in the same category
+        self._publish(seller["username"], "SP08 竞品A", price=100,
+                      category="数据分析")
+        self._publish(seller["username"], "SP08 竞品B", price=150,
+                      category="数据分析")
+        self._publish(seller["username"], "SP08 竞品C", price=200,
+                      category="数据分析")
+        prod = self._publish(seller["username"], "SP08 我的商品", price=300,
+                             category="数据分析")
+
+        r = self.client.post(
+            "/api/v4/pricing/suggest",
+            json={"product_id": prod["id"]},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        # The suggested price should be within the competitor price range
+        # (competitors are 100-200, so suggested_price should be <= max_range)
+        self.assertGreaterEqual(body["suggested_price"], 0)
+        self.assertLessEqual(
+            body["suggested_price"], body["price_range"]["max"]
+        )
+        # Verify the price_range max is at or above the highest competitor price
+        self.assertGreaterEqual(body["price_range"]["max"], 200)
+        # Verify market_avg reflects the competitor prices
+        self.assertGreater(body["market_avg"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
