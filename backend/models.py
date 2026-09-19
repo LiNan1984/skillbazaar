@@ -1178,3 +1178,37 @@ class SellerSubscriptionStatsResponse(BaseModel):
     churn_rate: float
     by_plan: dict[str, dict]
     top_products: list[dict]
+
+
+# ---------- v4.9 Trial Run Models ----------
+
+class TrialRunRequest(BaseModel):
+    product_id: int
+    input_text: str
+
+
+class TrialRunResponse(BaseModel):
+    trial_id: int
+    product_id: int
+    product_name: str
+    status: str
+    output_text: str | None = None
+    error_message: str | None = None
+    tokens_used: int = 0
+    execution_time_ms: int = 0
+    created_at: str
+
+
+class TrialHistoryResponse(BaseModel):
+    trials: list[TrialRunResponse]
+
+
+class CanTrialResponse(BaseModel):
+    can_trial: bool
+    reason: str | None = None
+    trials_remaining: int = 3
+
+
+class TrialCleanupResponse(BaseModel):
+    deleted_count: int = 0
+    message: str = ""

@@ -24,6 +24,7 @@ async def init_db():
         await db.close()
     await seed_default_activity()
     await init_semantic_search()
+    await init_trial_runs_table()
 
 
 async def _create_tables(db: aiosqlite.Connection):
@@ -609,6 +610,23 @@ async def _create_tables(db: aiosqlite.Connection):
             product_id INTEGER NOT NULL REFERENCES products(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS trial_runs (
+            trial_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            product_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'running',
+            input_text TEXT,
+            output_text TEXT,
+            error_message TEXT,
+            tokens_used INTEGER DEFAULT 0,
+            execution_time_ms INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_trial_runs_user ON trial_runs(user_id);
+        CREATE INDEX IF NOT EXISTS idx_trial_runs_product ON trial_runs(product_id);
     """)
     await db.commit()
 
@@ -5013,5 +5031,150 @@ async def get_seller_subscription_stats_db(seller_id: str) -> dict:
             "by_plan": by_plan,
             "top_products": top_products,
         }
+    finally:
+        await db.close()
+
+
+# ---------- Trial Run Helpers ----------
+
+async def init_trial_runs_table():
+    """Create indexes for the trial_runs table (table itself is in _create_tables)."""
+    db = await get_db()
+    try:
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_trial_runs_user ON trial_runs(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_trial_runs_product ON trial_runs(product_id)")
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def create_trial_run(user_id: str, product_id: int, input_text: str,
+                            status: str = "running") -> dict:
+    """Create a new trial run record. Returns the inserted row."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO trial_runs (user_id, product_id, status, input_text)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, product_id, status, input_text),
+        )
+        await db.commit()
+        trial_id = cursor.lastrowid
+        cursor = await db.execute("SELECT * FROM trial_runs WHERE trial_id = ?", (trial_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_trial_run(trial_id: int) -> dict | None:
+    """Get a trial run by ID."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM trial_runs WHERE trial_id = ?", (trial_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_trial_runs_by_user(user_id: str) -> list[dict]:
+    """Get all trial runs for a user, with product name joined."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT tr.*, p.name as product_name
+               FROM trial_runs tr
+               LEFT JOIN products p ON tr.product_id = p.id
+               WHERE tr.user_id = ?
+               ORDER BY tr.created_at DESC""",
+            (user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_trial_runs_by_user_and_product(user_id: str, product_id: int) -> list[dict]:
+    """Get all trial runs for a user+product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM trial_runs
+               WHERE user_id = ? AND product_id = ?
+               ORDER BY created_at DESC""",
+            (user_id, product_id),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def update_trial_run(trial_id: int, status: str = None, output_text: str = None,
+                            error_message: str = None, tokens_used: int = None,
+                            execution_time_ms: int = None) -> dict | None:
+    """Update a trial run record. Returns updated row or None."""
+    db = await get_db()
+    try:
+        sets = []
+        params = []
+        if status is not None:
+            sets.append("status = ?")
+            params.append(status)
+        if output_text is not None:
+            sets.append("output_text = ?")
+            params.append(output_text)
+        if error_message is not None:
+            sets.append("error_message = ?")
+            params.append(error_message)
+        if tokens_used is not None:
+            sets.append("tokens_used = ?")
+            params.append(tokens_used)
+        if execution_time_ms is not None:
+            sets.append("execution_time_ms = ?")
+            params.append(execution_time_ms)
+
+        if not sets:
+            return await get_trial_run(trial_id)
+
+        params.append(trial_id)
+        sql = f"UPDATE trial_runs SET {', '.join(sets)} WHERE trial_id = ?"
+        cursor = await db.execute(sql, params)
+        await db.commit()
+        if cursor.rowcount > 0:
+            return await get_trial_run(trial_id)
+        return None
+    finally:
+        await db.close()
+
+
+async def count_trial_runs_by_user_and_product(user_id: str, product_id: int) -> int:
+    """Count how many trial runs a user has done for a product."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM trial_runs WHERE user_id = ? AND product_id = ?",
+            (user_id, product_id),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+    finally:
+        await db.close()
+
+
+async def cleanup_old_trials(days: int = 30) -> int:
+    """Delete trial runs older than `days` days. Returns count deleted."""
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM trial_runs WHERE created_at < ?",
+            (cutoff,),
+        )
+        await db.commit()
+        return cursor.rowcount
     finally:
         await db.close()
