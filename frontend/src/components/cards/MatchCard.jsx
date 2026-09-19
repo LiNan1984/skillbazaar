@@ -18,7 +18,7 @@ export default function MatchCard({ card, authToken, userId }) {
   useEffect(() => {
     if (!authToken || !userId) return
     let cancelled = false
-    getLibrary(userId, authToken)
+    getLibrary(authToken)
       .then((data) => {
         if (cancelled) return
         const ids = (data?.data || []).map((item) => item.id)

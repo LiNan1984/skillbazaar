@@ -407,6 +407,13 @@ async def _create_tables(db: aiosqlite.Connection):
             FOREIGN KEY (agent_id) REFERENCES user_agents(id)
         );
 
+        CREATE TABLE IF NOT EXISTS agent_skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id INTEGER NOT NULL REFERENCES user_agents(id),
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS product_reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL REFERENCES products(id),
@@ -536,6 +543,33 @@ async def _create_tables(db: aiosqlite.Connection):
             account_name TEXT DEFAULT '',
             is_verified INTEGER DEFAULT 0,
             is_default INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS saved_searches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            query TEXT DEFAULT '',
+            filters TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS skill_bundles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            seller_id TEXT NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            discount_percent REAL DEFAULT 0,
+            bundle_price INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS bundle_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bundle_id INTEGER NOT NULL REFERENCES skill_bundles(id),
+            product_id INTEGER NOT NULL REFERENCES products(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -3774,5 +3808,330 @@ async def delete_payment_method(method_id: int, user_id: str) -> bool:
         )
         await db.commit()
         return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+# ============================================================
+# v4 Database Functions
+# ============================================================
+
+
+async def search_products(query: str = "", category: str = None,
+                          min_price: int = None, max_price: int = None,
+                          page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """Full-text search across products with optional filters."""
+    db = await get_db()
+    try:
+        offset = (page - 1) * page_size
+        where = ["1=1"]
+        params = []
+        if query:
+            where.append("(p.name LIKE ? OR p.description LIKE ? OR p.content_preview LIKE ?)")
+            like = f"%{query}%"
+            params.extend([like, like, like])
+        if category:
+            where.append("p.category = ?")
+            params.append(category)
+        if min_price is not None:
+            where.append("p.price >= ?")
+            params.append(min_price)
+        if max_price is not None:
+            where.append("p.price <= ?")
+            params.append(max_price)
+
+        sql = f"SELECT * FROM products p WHERE {' AND '.join(where)} ORDER BY p.created_at DESC LIMIT ? OFFSET ?"
+        cursor = await db.execute(sql, params + [page_size, offset])
+        rows = await cursor.fetchall()
+        results = [dict(r) for r in rows]
+
+        count_sql = f"SELECT COUNT(*) FROM products p WHERE {' AND '.join(where)}"
+        cursor = await db.execute(count_sql, params)
+        total = (await cursor.fetchone())[0]
+        return results, total
+    finally:
+        await db.close()
+
+
+async def save_search(user_id: str, name: str, query: str, filters: dict) -> int:
+    """Save a search for later re-use."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO saved_searches (user_id, name, query, filters) VALUES (?, ?, ?, ?)",
+            (user_id, name, query, json.dumps(filters) if filters else "{}")
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def get_saved_searches(user_id: str) -> list[dict]:
+    """Get all saved searches for a user."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM saved_searches WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,)
+        )
+        rows = await cursor.fetchall()
+        result = []
+        for r in rows:
+            row = dict(r)
+            row["filters"] = json.loads(row.get("filters") or "{}")
+            result.append(row)
+        return result
+    finally:
+        await db.close()
+
+
+async def fetch_saved_search(search_id: int, user_id: str) -> dict | None:
+    """Get a specific saved search."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM saved_searches WHERE id = ? AND user_id = ?",
+            (search_id, user_id)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result["filters"] = json.loads(result.get("filters") or "{}")
+        return result
+    finally:
+        await db.close()
+
+
+async def delete_saved_search(search_id: int, user_id: str) -> bool:
+    """Delete a saved search."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM saved_searches WHERE id = ? AND user_id = ?",
+            (search_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def get_seller_products(seller_name: str) -> list[dict]:
+    """Get all products by a seller (by seller_name/username)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM products WHERE seller_name = ? ORDER BY created_at DESC",
+            (seller_name,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def increment_product_view(product_id: int) -> None:
+    """Increment view count for a product."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ?",
+            (product_id,)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+# ---- Bundle Functions ----
+
+
+async def create_bundle(seller_id: str, name: str, description: str,
+                        discount_percent: float, bundle_price: int) -> dict:
+    """Create a new skill bundle."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO skill_bundles (seller_id, name, description, discount_percent, bundle_price)
+               VALUES (?, ?, ?, ?, ?)""",
+            (seller_id, name, description, discount_percent, bundle_price)
+        )
+        await db.commit()
+        return {
+            "id": cursor.lastrowid,
+            "seller_id": seller_id,
+            "name": name,
+            "description": description,
+            "discount_percent": discount_percent,
+            "bundle_price": bundle_price,
+            "is_active": 1,
+        }
+    finally:
+        await db.close()
+
+
+async def fetch_bundle_by_id(bundle_id: int) -> dict | None:
+    """Get bundle by ID."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM skill_bundles WHERE id = ?", (bundle_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_bundle_items(bundle_id: int) -> list[dict]:
+    """Get all items in a bundle with product details."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT bi.*, p.name as product_name, p.price as product_price
+               FROM bundle_items bi
+               JOIN products p ON bi.product_id = p.id
+               WHERE bi.bundle_id = ?""",
+            (bundle_id,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def fetch_bundle_item(bundle_id: int, product_id: int) -> dict | None:
+    """Check if a product is already in a bundle."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM bundle_items WHERE bundle_id = ? AND product_id = ?",
+            (bundle_id, product_id)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def fetch_all_bundles() -> list[dict]:
+    """Get all active bundles with seller info."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT b.*, u.username as seller_name
+               FROM skill_bundles b
+               JOIN users u ON b.seller_id = u.id
+               WHERE b.is_active = 1
+               ORDER BY b.created_at DESC"""
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def add_bundle_item(bundle_id: int, product_id: int) -> None:
+    """Add a product to a bundle."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO bundle_items (bundle_id, product_id) VALUES (?, ?)",
+            (bundle_id, product_id)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def remove_bundle_item(bundle_id: int, product_id: int) -> None:
+    """Remove a product from a bundle."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "DELETE FROM bundle_items WHERE bundle_id = ? AND product_id = ?",
+            (bundle_id, product_id)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def update_bundle_price(bundle_id: int, new_price: int) -> None:
+    """Update bundle price."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE skill_bundles SET bundle_price = ? WHERE id = ?",
+            (new_price, bundle_id)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+# ---- Agent v4 Helpers ----
+
+
+async def create_agent_v4(user_id: str, name: str, description: str, model: str) -> int:
+    """Create an agent (v4) with model field instead of system_prompt."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO user_agents (user_id, name, description, system_prompt, skill_ids) VALUES (?, ?, ?, ?, ?)",
+            (user_id, name, description, "", "[]"),
+        )
+        await db.commit()
+        agent_id = cursor.lastrowid
+        # Update with model in agent_config
+        await db.execute(
+            "UPDATE user_agents SET agent_config = ? WHERE id = ?",
+            (json.dumps({"model": model}), agent_id)
+        )
+        await db.commit()
+        return agent_id
+    finally:
+        await db.close()
+
+
+async def get_agent_skills(agent_id: int) -> list[dict]:
+    """Get skills for an agent."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """SELECT as_sk.*, p.name as product_name, p.price as product_price, p.category
+               FROM agent_skills as_sk
+               JOIN products p ON as_sk.product_id = p.id
+               WHERE as_sk.agent_id = ?""",
+            (agent_id,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def add_agent_skill(agent_id: int, product_id: int) -> None:
+    """Add a skill to an agent."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO agent_skills (agent_id, product_id) VALUES (?, ?)",
+            (agent_id, product_id)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def remove_agent_skill(agent_id: int, product_id: int) -> None:
+    """Remove a skill from an agent."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "DELETE FROM agent_skills WHERE agent_id = ? AND product_id = ?",
+            (agent_id, product_id)
+        )
+        await db.commit()
     finally:
         await db.close()

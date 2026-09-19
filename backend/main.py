@@ -11,12 +11,16 @@ from routers.bounties import router as bounties_router
 from routers.cron import router as cron_router
 from routers.activities import router as activities_router
 from routers.agents import router as agents_router
+from routers.agents_v4 import router as agents_v4_router
 from routers.sandbox import router as sandbox_router
 from routers.discovery import router as discovery_router
 from routers.profiles import router as profiles_router
 from routers.versions import router as versions_router
 from routers.analytics import router as analytics_router
+from routers.analytics_v4 import router as analytics_v4_router
 from routers.payments import router as payments_router
+from routers.search_v4 import router as search_v4_router
+from routers.bundles_v4 import router as bundles_v4_router
 
 
 @asynccontextmanager
@@ -51,12 +55,16 @@ app.include_router(bounties_router)
 app.include_router(cron_router)
 app.include_router(activities_router)
 app.include_router(agents_router)
+app.include_router(agents_v4_router)
 app.include_router(sandbox_router)
 app.include_router(discovery_router)
 app.include_router(profiles_router)
 app.include_router(versions_router)
 app.include_router(analytics_router)
+app.include_router(analytics_v4_router)
 app.include_router(payments_router)
+app.include_router(search_v4_router)
+app.include_router(bundles_v4_router)
 
 
 @app.get("/")

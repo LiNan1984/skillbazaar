@@ -29,26 +29,31 @@ async function main() {
 
   // Register + Login
   console.log('[Auth] Registering...');
+  const uniqueUsername = `interact_${Date.now()}`;
   const regResp = await page.request.post(`${API}/api/v2/auth/register`, {
-    data: { username: 'interact_test', password: 'TestPass123!', nickname: 'Interact' }
+    data: { username: uniqueUsername, password: 'TestPass123!', nickname: 'Interact' }
   });
   const regData = await regResp.json();
-  const username = regData.username;
-  console.log(`[Auth] Registered: ${username}`);
+  const username = regData.username || uniqueUsername;
+  console.log(`[Auth] Registered: ${username} (status: ${regResp.status()})`);
 
   const loginResp = await page.request.post(`${API}/api/v2/auth/login`, {
     data: { username, password: 'TestPass123!' }
   });
   const loginData = await loginResp.json();
+  if (!loginData.token) {
+    console.error('Login failed:', loginData);
+    throw new Error('Login failed');
+  }
   const token = loginData.token;
   const userId = loginData.user_id;
-  console.log(`[Auth] Logged in, token: ${token.substring(0, 20)}...`);
+  console.log(`[Auth] Logged in, userId: ${userId}`);
 
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.evaluate((t) => {
-    localStorage.setItem('skillbazaar_token', t);
-    localStorage.setItem('skillbazaar_user_id', '${userId}');
-  }, token);
+  await page.evaluate((data) => {
+    localStorage.setItem('skillbazaar_token', data.token);
+    localStorage.setItem('skillbazaar_user_id', data.userId);
+  }, { token, userId });
   await page.waitForTimeout(1000);
 
   // ============ TEST 1: Product Purchase Flow ============

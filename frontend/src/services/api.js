@@ -71,8 +71,8 @@ export async function getTransactions(userId, token) {
   })
 }
 
-export async function getLibrary(userId, token) {
-  return api.get(`/transactions/library/${userId}`, {
+export async function getLibrary(token) {
+  return api.get('/transactions/library', {
     headers: { Authorization: `Bearer ${token}` },
   })
 }

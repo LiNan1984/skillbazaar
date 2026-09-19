@@ -805,3 +805,150 @@ class PaymentMethodResponse(BaseModel):
     is_verified: bool = False
     is_default: bool = False
     created_at: Optional[str] = None
+
+
+class SearchRequest(BaseModel):
+    query: str = ""
+    filters: dict = {}
+
+
+class SearchResponse(BaseModel):
+    results: list[dict]
+    total: int
+
+
+# ---------- Bundle v4 Models ----------
+
+
+class BundleItemResponse(BaseModel):
+    product_id: int
+    product_name: str = ""
+    product_price: int = 0
+
+
+class BundleCreate(BaseModel):
+    name: str
+    description: str = ""
+    product_ids: list[int]
+    discount_percent: float = 0
+
+
+class BundleResponse(BaseModel):
+    id: int
+    seller_id: str = ""
+    name: str
+    description: str = ""
+    discount_percent: float = 0
+    bundle_price: int = 0
+    items: list[dict] = []
+    is_active: bool = True
+    created_at: Optional[str] = None
+
+
+class BundlePurchaseResponse(BaseModel):
+    id: int
+    status: str
+    items_count: int
+
+
+class BundleListResponse(BaseModel):
+    bundles: list[dict]
+
+
+# ---------- Agent v4 Models ----------
+
+
+class UserAgentV4Response(BaseModel):
+    id: int
+    owner_id: str
+    name: str
+    description: str
+    model: str
+    skills: list[dict] = []
+    created_at: Optional[str] = None
+
+
+class AgentSkillInfo(BaseModel):
+    product_id: int
+    name: str
+    price: int
+    category: str
+
+
+class SkillAdd(BaseModel):
+    product_id: int
+
+
+# ---------- Analytics v4 Models ----------
+
+
+class ProductAnalyticsDashboard(BaseModel):
+    views: int
+    purchases: int
+    conversion_rate: float
+    revenue: int
+
+
+class CategoryAnalyticsItem(BaseModel):
+    category: str
+    product_count: int
+    total_views: int = 0
+    total_purchases: int = 0
+    revenue: int = 0
+
+
+class SellerAnalyticsResponse(BaseModel):
+    total_products: int
+    total_views: int
+    total_purchases: int
+    total_revenue: int
+    avg_conversion_rate: float
+    top_products: list[dict]
+
+
+class CategoryAnalyticsResponse(BaseModel):
+    categories: list[CategoryAnalyticsItem]
+
+
+class PlatformOverviewResponse(BaseModel):
+    total_users: int
+    total_products: int
+    total_revenue: int
+    top_categories: list[dict]
+
+
+# ---------- Search v4 Models ----------
+
+
+class SearchFilters(BaseModel):
+    query: str = ""
+    category: str = ""
+    min_price: Optional[int] = None
+    max_price: Optional[int] = None
+    min_rating: Optional[float] = None
+    sort_by: str = "relevance"
+    page: int = 1
+    page_size: int = 20
+
+
+class SavedSearchCreate(BaseModel):
+    name: str
+    query: str = ""
+    filters: dict = {}
+
+
+class SaveSearchRequest(SavedSearchCreate):
+    """Alias for SavedSearchCreate (backward compat)."""
+
+
+class SavedSearchResponse(BaseModel):
+    id: int
+    user_id: str
+    name: str
+    query: str = ""
+    filters: dict
+    created_at: Optional[str] = None
+
+
+class SaveSearchResponse(SavedSearchResponse):
+    """Alias for SavedSearchResponse (backward compat)."""

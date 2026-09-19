@@ -109,7 +109,7 @@ export default function ProductDetailPage({ userId, authToken }) {
 
     // Check if user already owns this product
     if (userId && authToken) {
-      getLibrary(userId, authToken)
+      getLibrary(authToken)
         .then((res) => {
           const items = res.data || res.items || res || []
           const isOwned = items.some(p => String(p.id) === String(id))

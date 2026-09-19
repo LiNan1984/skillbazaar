@@ -33,7 +33,7 @@ export default function MyLibraryPage({ userId, authToken }) {
     setLoading(true)
     try {
       // Always load library items (needed for skill assembly in agent tab)
-      const libPromise = userId ? getLibrary(userId, authToken).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
+      const libPromise = authToken ? getLibrary(authToken).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
       const agentsPromise = authToken ? getMyAgents(authToken).catch(() => []) : Promise.resolve([])
       const cronsPromise = authToken ? getMyCronSubscriptions(authToken).catch(() => []) : Promise.resolve([])
 

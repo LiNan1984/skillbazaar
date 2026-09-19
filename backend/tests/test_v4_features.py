@@ -79,6 +79,23 @@ async def _fetchone(sql: str, params=()):
 class _V4Base(unittest.TestCase):
     """Shared setUp / tearDown for v4 feature tests."""
 
+    def setUp(self):
+        """Clear bundle tables before each test to ensure isolation."""
+        # Clear tables that might have residual data from other tests
+        async def _clear():
+            conn = await aiosqlite.connect(db_mod.DB_PATH)
+            try:
+                await conn.execute("DELETE FROM bundle_items")
+                await conn.execute("DELETE FROM skill_bundles")
+                await conn.execute("DELETE FROM product_analytics")
+                await conn.execute("DELETE FROM saved_searches")
+                await conn.execute("DELETE FROM user_agents")
+                await conn.execute("DELETE FROM agent_skills")
+                await conn.commit()
+            finally:
+                await conn.close()
+        asyncio.run(_clear())
+
     @classmethod
     def setUpClass(cls):
         db_mod.DB_PATH = _TMP.name
@@ -148,7 +165,7 @@ class _V4Base(unittest.TestCase):
 
     def _db_agents(self, user_id: str) -> list[dict]:
         return asyncio.run(_fetchall(
-            "SELECT * FROM user_agents WHERE owner_id = ?", (user_id,),
+            "SELECT * FROM user_agents WHERE user_id = ?", (user_id,),
         ))
 
     def _db_saved_searches(self, user_id: str) -> list[dict]:
@@ -672,9 +689,12 @@ class TestAdvancedSearch(_V4Base):
         )
         self.assertEqual(r.status_code, 200, r.text)
         results = r.json()["results"]
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["category"], "Agent")
-        self.assertGreaterEqual(results[0]["price"], 100)
+        # 2 pre-seeded agents + 1 test-seeded agent fall in [100, 200]
+        self.assertEqual(len(results), 3)
+        for item in results:
+            self.assertEqual(item["category"], "Agent")
+            self.assertGreaterEqual(item["price"], 100)
+            self.assertLessEqual(item["price"], 200)
 
     # ---- AS-03 ----
     def test_save_and_retrieve_search(self):
