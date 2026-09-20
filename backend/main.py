@@ -33,6 +33,7 @@ from routers.bulk_trial_v4 import router as bulk_trial_v4_router
 from routers.compare_v4 import router as compare_v4_router
 from routers.reviews_v4 import router as reviews_v4_router
 from routers.bulk_operations_v4 import router as bulk_operations_v4_router
+from routers.seller_dashboard_v4 import router as seller_dashboard_v4_router
 
 
 @asynccontextmanager
@@ -95,6 +96,7 @@ app.include_router(bulk_trial_v4_router)
 app.include_router(compare_v4_router)
 app.include_router(reviews_v4_router)
 app.include_router(bulk_operations_v4_router)
+app.include_router(seller_dashboard_v4_router)
 
 
 @app.get("/")

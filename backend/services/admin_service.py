@@ -57,7 +57,10 @@ async def list_skills_for_admin(
 
         offset = (page - 1) * page_size
         data_cursor = await db_conn.execute(
-            """SELECT sa.*, p.name as product_name, p.category, p.status as product_status
+            """SELECT sa.id, sa.product_id, sa.skill_type, sa.skill_meta,
+                      sa.content_hash, sa.file_size, sa.version,
+                      sa.created_at, sa.updated_at,
+                      p.name as product_name, p.category, p.status as product_status
             FROM skill_assets sa
             LEFT JOIN products p ON sa.product_id = p.id
             ORDER BY sa.created_at DESC LIMIT ? OFFSET ?""",

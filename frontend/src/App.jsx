@@ -19,6 +19,7 @@ const BountyDetailPage = lazy(() => import('./pages/BountyDetailPage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 const ActivitiesPage = lazy(() => import('./pages/ActivitiesPage'))
 const SandboxPage = lazy(() => import('./pages/SandboxPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function App() {
   const [userId, setUserId] = useState(() => localStorage.getItem('skillbazaar_user_id') || '')
@@ -83,6 +84,7 @@ function App() {
               <Route path="/admin" element={<AdminPage authToken={authToken} />} />
               <Route path="/activities" element={<ActivitiesPage userId={userId} authToken={authToken} onLoginClick={() => setAuthModal('login')} />} />
               <Route path="/sandbox" element={<SandboxPage userId={userId} authToken={authToken} onLoginClick={() => setAuthModal('login')} />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
         </main>

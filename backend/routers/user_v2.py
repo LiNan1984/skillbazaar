@@ -27,6 +27,14 @@ async def get_current_user(authorization: str = Header(None)) -> dict:
     return user
 
 
+def _seller_names(user: dict) -> list[str]:
+    return [v for v in (user.get("username"), user.get("nickname")) if v]
+
+
+def _owns_product(product: dict, user: dict) -> bool:
+    return user.get("role") == "admin" or product.get("seller_name") in _seller_names(user)
+
+
 @router.post("/auth/register", response_model=AuthResponse)
 async def register(req: RegisterRequest):
     if len(req.username) < 3:
@@ -154,10 +162,11 @@ async def read_notification(notif_id: int, user: dict = Depends(get_current_user
 async def get_my_products(user: dict = Depends(get_current_user)):
     db_conn = await db.get_db()
     try:
-        seller = user.get("username") or user.get("nickname") or ""
+        seller_names = _seller_names(user)
+        placeholders = ",".join("?" for _ in seller_names)
         cursor = await db_conn.execute(
-            "SELECT * FROM products WHERE seller_name = ? ORDER BY created_at DESC",
-            (seller,),
+            f"SELECT * FROM products WHERE seller_name IN ({placeholders}) ORDER BY created_at DESC",
+            seller_names,
         )
         rows = await cursor.fetchall()
         return {"products": [dict(r) for r in rows]}
@@ -170,7 +179,7 @@ async def delete_seller_product(product_id: int, user: dict = Depends(get_curren
     product = await db.fetch_product_by_id(product_id)
     if not product:
         raise HTTPException(404, "商品不存在")
-    if product.get("seller_name") != user.get("nickname") and user.get("role") != "admin":
+    if not _owns_product(product, user):
         raise HTTPException(403, "无权删除")
     await db.execute("DELETE FROM products WHERE id = ?", (product_id,))
     await db.commit()
@@ -188,8 +197,7 @@ async def update_product_status(
     if not product:
         raise HTTPException(404, "商品不存在")
 
-    seller = user.get("username") or user.get("nickname") or ""
-    if product["seller_name"] != seller and user.get("role") != "admin":
+    if not _owns_product(product, user):
         raise HTTPException(403, "只能管理自己的商品")
 
     if status not in ("active", "inactive"):
@@ -219,14 +227,15 @@ async def update_product_status(
 
 @router.get("/seller/stats")
 async def seller_stats(user: dict = Depends(get_current_user)):
-    seller = user.get("username") or user.get("nickname") or ""
+    seller_names = _seller_names(user)
+    placeholders = ",".join("?" for _ in seller_names)
     db_conn = await db.get_db()
     try:
-        cur = await db_conn.execute("SELECT COUNT(*) FROM products WHERE seller_name = ?", (seller,))
+        cur = await db_conn.execute(f"SELECT COUNT(*) FROM products WHERE seller_name IN ({placeholders})", seller_names)
         product_count = (await cur.fetchone())[0]
-        cur = await db_conn.execute("SELECT COUNT(*) FROM products WHERE seller_name = ? AND status = 'active'", (seller,))
+        cur = await db_conn.execute(f"SELECT COUNT(*) FROM products WHERE seller_name IN ({placeholders}) AND status = 'active'", seller_names)
         active_count = (await cur.fetchone())[0]
-        cur = await db_conn.execute("SELECT COALESCE(SUM(sales), 0) FROM products WHERE seller_name = ?", (seller,))
+        cur = await db_conn.execute(f"SELECT COALESCE(SUM(sales), 0) FROM products WHERE seller_name IN ({placeholders})", seller_names)
         total_sales = (await cur.fetchone())[0]
         return {
             "product_count": product_count,
@@ -243,8 +252,7 @@ async def product_lifecycle(product_id: int, user: dict = Depends(get_current_us
     product = await db.fetch_product_by_id(product_id)
     if not product:
         raise HTTPException(404, "商品不存在")
-    seller = user.get("username") or user.get("nickname") or ""
-    if product["seller_name"] != seller and user.get("role") != "admin":
+    if not _owns_product(product, user):
         raise HTTPException(403, "只能查看自己的商品")
     events = await db.fetch_lifecycle_events(product_id, limit=50)
     return {"events": events}
@@ -383,6 +391,8 @@ async def admin_update_user_status(
     valid_statuses = ("active", "banned")
     if status not in valid_statuses:
         raise HTTPException(400, f"无效状态，支持: {', '.join(valid_statuses)}")
+    if status == "banned" and user_id == user.get("id"):
+        raise HTTPException(400, "不能封禁自己")
     result = await admin_svc.update_user_status(user_id, status)
     if not result:
         raise HTTPException(404, "用户不存在")

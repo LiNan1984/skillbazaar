@@ -555,7 +555,7 @@ class BountyResponse(BaseModel):
 
 
 class BountyApplicationCreate(BaseModel):
-    bounty_id: int
+    bounty_id: int = 0
     proposal: str
     estimated_days: int = 7
     quoted_price: int = Field(gt=0)
@@ -1358,3 +1358,42 @@ class ComparisonSaveResponse(BaseModel):
     comparison_id: str
     share_url: str
     product_ids: list[int]
+
+
+# ---- Seller Dashboard v4.14 ----
+
+class SellerProductMetric(BaseModel):
+    id: int
+    name: str
+    price: float
+    status: str
+    views: int
+    purchases: int
+    revenue: float
+    rating: float
+    conversion_rate: float
+    trend: str  # "up" | "down" | "stable"
+
+
+class SellerDashboardResponse(BaseModel):
+    total_products: int
+    total_views: int
+    total_purchases: int
+    total_revenue: float
+    conversion_rate: float
+    avg_rating: float
+    top_products: list[dict]
+    recent_activity: list[dict]
+
+
+class SellerProductsResponse(BaseModel):
+    products: list[SellerProductMetric]
+    total: int
+    page: int
+    limit: int
+
+
+class SellerTrendResponse(BaseModel):
+    period: str
+    data: list[dict]
+    summary: dict

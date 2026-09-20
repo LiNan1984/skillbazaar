@@ -8,11 +8,6 @@ from agents.nodes import _call_llm, SYSTEM_PROMPT
 
 
 async def create_agent(user_id: str, name: str, description: str, system_prompt: str, skill_ids: list[int]) -> dict:
-    # Verify user owns the skills (purchased products)
-    for sid in skill_ids:
-        lib = await db.fetch_library(user_id)
-        owned = [item for item in (lib if isinstance(lib, list) else []) if item.get("product_id") == sid]
-        # Allow any skill_id for now — ownership check can be added later
     agent_id = await db.insert_user_agent(user_id, name, description, system_prompt, skill_ids)
     return {"id": agent_id, "name": name}
 

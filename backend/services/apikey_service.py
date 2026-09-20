@@ -19,6 +19,38 @@ async def _get_db():
     return db
 
 
+async def _ensure_tables(db: aiosqlite.Connection) -> None:
+    """Create api_keys and cli_download_tokens tables if missing."""
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            api_key TEXT NOT NULL UNIQUE,
+            name TEXT DEFAULT 'default',
+            permissions TEXT DEFAULT 'chat,execute',
+            rate_limit INTEGER DEFAULT 100,
+            usage_count INTEGER DEFAULT 0,
+            last_used_at REAL,
+            is_active INTEGER DEFAULT 1,
+            created_at REAL NOT NULL
+        )
+        """
+    )
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cli_download_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at REAL NOT NULL
+        )
+        """
+    )
+    await db.commit()
+
+
 def generate_api_key() -> str:
     """Generate sk-xxx format API key"""
     return f"sk-{secrets.token_urlsafe(32)}"
@@ -29,6 +61,7 @@ async def create_api_key(user_id: str, name: str = "default", permissions: str =
     api_key = generate_api_key()
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         # Limit 5 keys per user
         cursor = await db.execute("SELECT count(*) as cnt FROM api_keys WHERE user_id=? AND is_active=1", (user_id,))
         row = await cursor.fetchone()
@@ -56,6 +89,7 @@ async def list_api_keys(user_id: str) -> list:
     """列出用户的所有API Key（脱敏显示）"""
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         cursor = await db.execute(
             "SELECT id, api_key, name, permissions, created_at, last_used_at, usage_count, rate_limit, is_active FROM api_keys WHERE user_id=? ORDER BY created_at DESC",
             (user_id,)
@@ -81,6 +115,7 @@ async def revoke_api_key(user_id: str, key_id: int) -> dict:
     """撤销API Key"""
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         await db.execute(
             "UPDATE api_keys SET is_active=0 WHERE id=? AND user_id=?",
             (key_id, user_id)
@@ -95,6 +130,7 @@ async def verify_api_key(api_key: str) -> dict | None:
     """验证API Key，返回用户信息+权限（用于OpenAI兼容接口鉴权）"""
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         cursor = await db.execute(
             "SELECT * FROM api_keys WHERE api_key=? AND is_active=1",
             (api_key,)
@@ -125,6 +161,7 @@ async def generate_cli_download_token(user_id: str) -> dict:
     token = str(uuid.uuid4())
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         await db.execute(
             "INSERT INTO cli_download_tokens (token, user_id, created_at) VALUES (?, ?, ?)",
             (token, user_id, time.time())
@@ -143,6 +180,7 @@ async def verify_cli_token(token: str) -> str | None:
     """验证CLI下载token，返回user_id"""
     db = await _get_db()
     try:
+        await _ensure_tables(db)
         cursor = await db.execute(
             "SELECT * FROM cli_download_tokens WHERE token=? AND used=0",
             (token,)

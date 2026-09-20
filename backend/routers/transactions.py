@@ -46,6 +46,12 @@ async def get_user_transactions(
     return {"success": True, "data": result}
 
 
+@router.get("/library")
+async def get_my_library(user: dict = Depends(get_current_user)):
+    items = await tx_service.get_user_library(user["id"])
+    return {"success": True, "data": items, "total": len(items)}
+
+
 @router.get("/library/{user_id}")
 async def get_user_library(user_id: str, user: dict = Depends(get_current_user)):
     if user_id != user["id"]:

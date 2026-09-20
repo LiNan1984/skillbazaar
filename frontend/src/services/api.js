@@ -379,7 +379,7 @@ export async function redeemPoints(data, token) {
 }
 
 export async function redeemPointsForQuota(token, hours) {
-  return api.post('/sandbox/redeem-quota', { hours }, { headers: { Authorization: `Bearer ${token}` } })
+  return api.post('/activities/points/redeem', { amount: hours, redeem_type: 'sandbox' }, { headers: { Authorization: `Bearer ${token}` } })
 }
 
 export async function getLeaderboard(limit = 20) {

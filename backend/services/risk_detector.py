@@ -22,11 +22,11 @@ RISK_PROMPT = """你是 SkillBazaar 平台的内容安全审核AI。分析以下
 
 回复JSON格式（用```json ```包裹）：
 ```json
-{
+{{
   "risk_score": 0-100的整数,
   "risk_tags": ["标签列表"],
   "reason": "判定理由"
-}
+}}
 ```
 
 内容类型：{content_type}

@@ -155,7 +155,15 @@ export default function ProductDetailPage({ userId, authToken }) {
         }
       }
       const result = await executeSkill(id, userId || 'anonymous', inputParams ? JSON.stringify(inputParams) : null)
-      setTrialResult(result)
+      if (result?.error) {
+        const raw = String(result.error)
+        const friendly = /Bearer|API.?key|header/i.test(raw)
+          ? '技能执行服务暂未配置，请稍后再试或联系卖家'
+          : raw
+        setTrialError(friendly)
+      } else {
+        setTrialResult(result)
+      }
     } catch (err) {
       setTrialError(err?.detail || err?.message || 'Trial execution failed')
     } finally {

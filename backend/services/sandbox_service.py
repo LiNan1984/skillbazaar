@@ -47,8 +47,11 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "GLM-5.1-FP8")
 
 DB_PATH = os.environ.get("SKBZ_DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "skillbazaar.db"))
 
-# Sandbox workspace base dir
-SANDBOX_WORKSPACE = "/data/skbz-sandbox-workspaces"
+# Sandbox workspace base dir (env override for container deployments)
+SANDBOX_WORKSPACE = os.environ.get(
+    "SKBZ_SANDBOX_WORKSPACE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "sandbox-workspaces"),
+)
 
 
 def _cubelet_available() -> bool:
@@ -274,8 +277,15 @@ async def get_or_create_sandbox(user_id: str, language: str = "python") -> dict:
         existing = await cursor.fetchone()
         if existing:
             row = dict(existing)
-            # Check if expired
-            if row.get("expires_at") and time.time() > row["expires_at"]:
+            # Check if expired (expires_at column is TEXT but stores epoch float)
+            raw_expires = row.get("expires_at")
+            expired = False
+            if raw_expires:
+                try:
+                    expired = time.time() > float(raw_expires)
+                except (TypeError, ValueError):
+                    expired = False
+            if expired:
                 await db.execute(
                     "UPDATE sandbox_sessions SET status='expired' WHERE sandbox_id=?",
                     (row["sandbox_id"],)

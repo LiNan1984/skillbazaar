@@ -5478,3 +5478,179 @@ async def fetch_user_bulk_operations(user_id: str, page: int = 1, limit: int = 2
         return operations, total
     finally:
         await db.close()
+
+
+# ---- Seller Dashboard Helpers v4.14 ----
+
+async def get_seller_total_stats(seller_name: str) -> dict:
+    """Get aggregated stats across all products for a seller."""
+    db = await get_db()
+    try:
+        # Total products
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM products WHERE seller_name = ? AND status = 'active'",
+            (seller_name,),
+        )
+        total_products = (await cursor.fetchone())[0]
+
+        # Total views
+        cursor = await db.execute(
+            "SELECT COALESCE(SUM(views), 0) FROM products WHERE seller_name = ?",
+            (seller_name,),
+        )
+        total_views = (await cursor.fetchone())[0]
+
+        # Total purchases (completed transactions)
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM transactions t
+               JOIN products p ON t.product_id = p.id
+               WHERE p.seller_name = ? AND t.type = 'buy' AND t.status = 'completed'""",
+            (seller_name,),
+        )
+        total_purchases = (await cursor.fetchone())[0]
+
+        # Total revenue
+        cursor = await db.execute(
+            """SELECT COALESCE(SUM(p.price), 0) FROM transactions t
+               JOIN products p ON t.product_id = p.id
+               WHERE p.seller_name = ? AND t.type = 'buy' AND t.status = 'completed'""",
+            (seller_name,),
+        )
+        total_revenue = (await cursor.fetchone())[0] or 0.0
+
+        # Average rating
+        cursor = await db.execute(
+            "SELECT COALESCE(AVG(rating), 0) FROM products WHERE seller_name = ? AND status = 'active'",
+            (seller_name,),
+        )
+        avg_rating = round((await cursor.fetchone())[0], 2)
+
+        # Conversion rate
+        conversion_rate = round((total_purchases / total_views * 100), 2) if total_views > 0 else 0.0
+
+        return {
+            "total_products": total_products,
+            "total_views": total_views,
+            "total_purchases": total_purchases,
+            "total_revenue": float(total_revenue),
+            "conversion_rate": conversion_rate,
+            "avg_rating": avg_rating,
+        }
+    finally:
+        await db.close()
+
+
+async def get_seller_product_stats(seller_name: str, page: int = 1, limit: int = 20, sort: str = "revenue") -> tuple[list[dict], int]:
+    """Get per-product stats for a seller with sorting."""
+    db = await get_db()
+    try:
+        # Build sort clause
+        valid_sorts = {"revenue": "revenue", "views": "views", "purchases": "purchases", "rating": "rating"}
+        sort_col = valid_sorts.get(sort, "revenue")
+
+        # Get total count
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM products WHERE seller_name = ?",
+            (seller_name,),
+        )
+        total = (await cursor.fetchone())[0]
+
+        # Get products with computed stats
+        offset = (page - 1) * limit
+        cursor = await db.execute(
+            f"""SELECT p.id, p.name, p.price, p.status, p.views, p.rating,
+                       COALESCE(COUNT(t.id), 0) as purchases,
+                       COALESCE(SUM(CASE WHEN t.type='buy' AND t.status='completed' THEN p.price ELSE 0 END), 0) as revenue
+                FROM products p
+                LEFT JOIN transactions t ON p.id = t.product_id
+                WHERE p.seller_name = ?
+                GROUP BY p.id
+                ORDER BY {sort_col} DESC
+                LIMIT ? OFFSET ?""",
+            (seller_name, limit, offset),
+        )
+        rows = await cursor.fetchall()
+
+        products = []
+        for row in rows:
+            d = dict(row)
+            views = d.get("views", 0) or 0
+            purchases = d.get("purchases", 0) or 0
+            revenue = d.get("revenue", 0) or 0.0
+            conv_rate = round((purchases / views * 100), 2) if views > 0 else 0.0
+            products.append({
+                "id": d["id"],
+                "name": d["name"],
+                "price": d["price"],
+                "status": d["status"],
+                "views": views,
+                "purchases": purchases,
+                "revenue": round(float(revenue), 2),
+                "rating": round(d.get("rating", 0) or 0, 2),
+                "conversion_rate": conv_rate,
+                "trend": "stable",  # Placeholder - could compute vs previous period
+            })
+        return products, total
+    finally:
+        await db.close()
+
+
+async def get_seller_trend_data(seller_name: str, period: str = "30d") -> dict:
+    """Get daily trend data for a seller's products."""
+    db = await get_db()
+    try:
+        days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 30)
+        cutoff_date = datetime.now() - timedelta(days=days)
+
+        # Get daily stats from transactions
+        cursor = await db.execute(
+            """SELECT DATE(t.created_at) as date,
+                       COUNT(*) as purchases,
+                       COALESCE(SUM(p.price), 0) as revenue
+                FROM transactions t
+                JOIN products p ON t.product_id = p.id
+                WHERE p.seller_name = ?
+                  AND t.type = 'buy'
+                  AND t.status = 'completed'
+                  AND t.created_at >= ?
+                GROUP BY DATE(t.created_at)
+                ORDER BY date ASC""",
+            (seller_name, cutoff_date.isoformat()),
+        )
+        rows = await cursor.fetchall()
+
+        # Build date range
+        data = []
+        total_views = 0
+        total_purchases = 0
+        total_revenue = 0.0
+        date_set = {row[0] for row in rows}
+        for i in range(days):
+            date_str = (cutoff_date + timedelta(days=i)).strftime("%Y-%m-%d")
+            if date_str in date_set:
+                row = next(r for r in rows if r[0] == date_str)
+                purchases = row[1]
+                revenue = row[2]
+            else:
+                purchases = 0
+                revenue = 0.0
+            data.append({
+                "date": date_str,
+                "views": 0,  # Views not tracked per-day in current schema
+                "purchases": purchases,
+                "revenue": round(float(revenue), 2),
+            })
+            total_purchases += purchases
+            total_revenue += revenue
+
+        return {
+            "period": period,
+            "data": data,
+            "summary": {
+                "total_views": total_views,
+                "total_purchases": total_purchases,
+                "total_revenue": round(float(total_revenue), 2),
+            },
+        }
+    finally:
+        await db.close()

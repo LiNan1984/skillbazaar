@@ -4356,5 +4356,169 @@ class TestReviews(_V4Base):
             self.assertTrue(rev["is_verified_purchase"])
 
 
+class TestSellerDashboard(_V4Base):
+    """Seller dashboard analytics — v4.14."""
+
+    # ---- SD-01 ----
+    def test_seller_dashboard_basic(self):
+        seller = self._register("sd01_seller", "卖家SD01")
+        p1 = self._publish(seller["username"], "SD01 商品A", price=100)
+        p2 = self._publish(seller["username"], "SD01 商品B", price=200)
+
+        # Create buyers and purchases
+        for i in range(3):
+            b = self._register(f"sd01_buyer{i}", f"买家SD01-{i}")
+            self._buy(b, p1["id"])
+        for i in range(2):
+            b = self._register(f"sd01_buyer_b{i}", f"买家SD01B-{i}")
+            self._buy(b, p2["id"])
+
+        r = self.client.get(
+            "/api/v4/seller/dashboard",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["total_products"], 2)
+        self.assertEqual(data["total_purchases"], 5)
+        self.assertEqual(data["total_revenue"], 700.0)
+        self.assertEqual(len(data["top_products"]), 2)
+        self.assertEqual(len(data["recent_activity"]), 7)
+
+    # ---- SD-02 ----
+    def test_seller_dashboard_no_products(self):
+        seller = self._register("sd02_seller", "卖家SD02")
+        r = self.client.get(
+            "/api/v4/seller/dashboard",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["total_products"], 0)
+        self.assertEqual(data["total_purchases"], 0)
+        self.assertEqual(data["total_revenue"], 0.0)
+        self.assertEqual(data["conversion_rate"], 0.0)
+
+    # ---- SD-03 ----
+    def test_seller_products_list(self):
+        seller = self._register("sd03_seller", "卖家SD03")
+        p1 = self._publish(seller["username"], "SD03 A", price=50)
+        p2 = self._publish(seller["username"], "SD03 B", price=100)
+
+        b = self._register("sd03_buyer", "买家SD03")
+        self._buy(b, p1["id"])
+        self._buy(b, p2["id"])
+
+        r = self.client.get(
+            "/api/v4/seller/products",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(len(data["products"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["limit"], 20)
+
+    # ---- SD-04 ----
+    def test_seller_products_sort_by_revenue(self):
+        seller = self._register("sd04_seller", "卖家SD04")
+        p1 = self._publish(seller["username"], "SD04 低价的", price=10)
+        p2 = self._publish(seller["username"], "SD04 高价的", price=100)
+
+        b = self._register("sd04_buyer", "买家SD04")
+        self._buy(b, p1["id"])
+        self._buy(b, p2["id"])
+
+        r = self.client.get(
+            "/api/v4/seller/products?sort=revenue",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        # Higher price product should be first
+        self.assertEqual(data["products"][0]["id"], p2["id"])
+        self.assertEqual(data["products"][1]["id"], p1["id"])
+
+    # ---- SD-05 ----
+    def test_seller_products_isolated(self):
+        seller1 = self._register("sd05_s1", "卖家SD05A")
+        seller2 = self._register("sd05_s2", "卖家SD05B")
+        self._publish(seller1["username"], "SD05 A的商品", price=50)
+        self._publish(seller2["username"], "SD05 B的商品", price=50)
+
+        r = self.client.get(
+            "/api/v4/seller/products",
+            headers=_x_user_id(seller1["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["products"][0]["name"], "SD05 A的商品")
+
+    # ---- SD-06 ----
+    def test_seller_trends_7d(self):
+        seller = self._register("sd06_seller", "卖家SD06")
+        p = self._publish(seller["username"], "SD06 商品", price=50)
+        b = self._register("sd06_buyer", "买家SD06")
+        self._buy(b, p["id"])
+
+        r = self.client.get(
+            "/api/v4/seller/trends?period=7d",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["period"], "7d")
+        self.assertEqual(len(data["data"]), 7)
+        self.assertEqual(data["summary"]["total_purchases"], 1)
+
+    # ---- SD-07 ----
+    def test_seller_trends_30d(self):
+        seller = self._register("sd07_seller", "卖家SD07")
+        p = self._publish(seller["username"], "SD07 商品", price=50)
+
+        r = self.client.get(
+            "/api/v4/seller/trends?period=30d",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["period"], "30d")
+        self.assertEqual(len(data["data"]), 30)
+        self.assertEqual(data["summary"]["total_purchases"], 0)
+
+    # ---- SD-08 ----
+    def test_seller_trends_invalid_period(self):
+        seller = self._register("sd08_seller", "卖家SD08")
+        r = self.client.get(
+            "/api/v4/seller/trends?period=1y",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 422, r.text)
+
+    # ---- SD-09 ----
+    def test_seller_dashboard_requires_auth(self):
+        r = self.client.get("/api/v4/seller/dashboard")
+        self.assertEqual(r.status_code, 401, r.text)
+
+    # ---- SD-10 ----
+    def test_seller_products_pagination(self):
+        seller = self._register("sd10_seller", "卖家SD10")
+        for i in range(5):
+            self._publish(seller["username"], f"SD10 商品{i}", price=50)
+
+        r = self.client.get(
+            "/api/v4/seller/products?page=1&limit=2",
+            headers=_x_user_id(seller["id"]),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["total"], 5)
+        self.assertEqual(len(data["products"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["limit"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

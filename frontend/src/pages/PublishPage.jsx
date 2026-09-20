@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, AlertCircle, FileCode, MessageSquare, Globe } from 'lucide-react'
-import { createProduct, uploadSkill, getMe } from '../services/api'
+import { createProduct, uploadSkill } from '../services/api'
 
 const SUBCATEGORIES = {
   Agent: ['交易助手', '数据分析', '客服机器人', '内容生成', '研究助手', '其他'],
@@ -67,24 +67,11 @@ export default function PublishPage({ userId, authToken }) {
     setPublishing(true)
 
     try {
-      const sellerName = form.seller_name.trim()
-      if (!sellerName) {
-        const lsNick = localStorage.getItem('skillbazaar_nickname')
-        const lsUser = localStorage.getItem('skillbazaar_username')
-        if (lsNick) {
-          // localStorage has it, use it
-        } else if (authToken) {
-          // Fetch from API
-          try {
-            const me = await getMe(authToken)
-            if (me?.nickname || me?.username) {
-              localStorage.setItem('skillbazaar_nickname', me.nickname || '')
-              localStorage.setItem('skillbazaar_username', me.username || '')
-            }
-          } catch {}
-        }
-      }
-      const finalSellerName = form.seller_name.trim() || localStorage.getItem('skillbazaar_nickname') || localStorage.getItem('skillbazaar_username') || '匿名卖家'
+      const sellerName = form.seller_name.trim() || localStorage.getItem('skillbazaar_nickname') || localStorage.getItem('skillbazaar_username') || '匿名卖家'
+      const tagList = form.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
 
       const payload = {
         name: form.name.trim(),
@@ -92,10 +79,7 @@ export default function PublishPage({ userId, authToken }) {
         category: form.category,
         sub_category: form.subcategory || null,
         price: Number(form.price),
-        tags: form.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean) || [],
+        tags: JSON.stringify(tagList),
         content_preview: form.content_preview.trim() || null,
         github_url: form.github_url.trim() || null,
         seller_name: sellerName,
