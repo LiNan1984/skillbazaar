@@ -166,24 +166,25 @@ jobs:
               (cd "$DIR/backend" && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/skillbazaar.log 2>&1 &)
             fi
 
-            # ---------- 8. 健康检查 ----------
-            OK=0
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then OK=1; break; fi
-              sleep 2
+            # ---------- 8. 健康检查（自动探测端口） ----------
+            PORT=""
+            for p in 8000 8001 8002 8003 8004 8080 8888; do
+              if curl -fsS "http://127.0.0.1:$p/health" >/dev/null 2>&1; then PORT="$p"; break; fi
             done
-            if [ "$OK" != "1" ]; then
-              echo "::error::健康检查未通过"
-              journalctl -u "${UNIT:-none}" -n 50 --no-pager 2>/dev/null || true
-              pm2 logs --nostream --lines 40 2>/dev/null || true
+            if [ -z "$PORT" ]; then
+              echo "::error::健康检查未通过（已探测 8000-8004/8080/8888）"
+              echo "==> pm2 状态:"
+              pm2 list --no-color || true
+              echo "==> 目标应用日志:"
+              pm2 logs "${PM2_APP:-skillbazaar-backend}" --nostream --lines 60 2>/dev/null || true
               tail -60 /var/log/skillbazaar.log 2>/dev/null || true
               exit 12
             fi
-            echo "==> 健康检查通过"
-            curl -fsS http://127.0.0.1:8000/health || true
+            echo "==> 健康检查通过，端口 $PORT"
+            curl -fsS "http://127.0.0.1:$PORT/health" || true
             echo
 
             # ---------- 9. 验证下载端点存在 ----------
-            curl -fsS -o /dev/null -w "download endpoint HTTP %{http_code}\n" \
-              "http://127.0.0.1:8000/api/skills/999999/download" || true
+            curl -fsS -o /dev/null -w "download endpoint HTTP %{http_code}（404=端点已注册，商品不存在属预期）\n" \
+              "http://127.0.0.1:$PORT/api/skills/999999/download" || true
             echo "==> 部署完成"
