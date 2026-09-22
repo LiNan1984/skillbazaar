@@ -57,6 +57,8 @@ jobs:
               exit 10
             fi
             echo "==> 仓库路径: $DIR"
+            # 仓库属主可能与登录用户不同，先解除 git 的 safe.directory 保护
+            git config --global --add safe.directory "$DIR" || true
             cd "$DIR"
 
             # ---------- 2. 记录当前状态（便于回滚） ----------
