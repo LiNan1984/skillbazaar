@@ -154,6 +154,38 @@ export async function verifyLicense(licenseToken, productId) {
   })
 }
 
+/**
+ * 下载 Skill 包（zip）。返回 blob，需自行触发浏览器下载。
+ * @param {number} productId
+ * @param {{ token?: string, userId?: string }} auth
+ */
+export async function downloadSkillZip(productId, { token, userId } = {}) {
+  return api.get(`/skills/${productId}/download`, {
+    params: userId ? { user_id: userId } : {},
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    responseType: 'blob',
+    timeout: 120000,
+  })
+}
+
+/** 把 blob 响应落盘为文件（从 Content-Disposition 取文件名）。 */
+export function saveBlobAsFile(blob, fallbackName) {
+  let filename = fallbackName
+  const disposition = blob && blob.headers && blob.headers['content-disposition']
+  if (disposition) {
+    const match = /filename="?([^"]+)"?/.exec(disposition)
+    if (match) filename = match[1]
+  }
+  const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export async function getMySkills(userId) {
   return api.get(`/skills/my?user_id=${userId}`)
 }

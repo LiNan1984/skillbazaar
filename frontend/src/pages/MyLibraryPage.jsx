@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, Bot, Zap, Clock, Target, Plus, Play, Trash2, Calendar, Coins, CheckCircle, Settings, ExternalLink } from 'lucide-react'
-import { getLibrary, getMyAgents, createAgent, runAgent, deleteAgent, getAgentRuns, getMyCronSubscriptions } from '../services/api'
+import { Package, Bot, Zap, Clock, Target, Plus, Play, Trash2, Calendar, Coins, CheckCircle, Settings, ExternalLink, Download } from 'lucide-react'
+import { getLibrary, getMyAgents, createAgent, runAgent, deleteAgent, getAgentRuns, getMyCronSubscriptions, downloadSkillZip, saveBlobAsFile } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -13,6 +13,24 @@ const TABS = [
 ]
 
 export default function MyLibraryPage({ userId, authToken }) {
+  const [zipBusy, setZipBusy] = useState(null)
+
+  const handleDownloadZip = async (e, item) => {
+    e.stopPropagation()
+    const pid = item.product_id || item.id
+    setZipBusy(pid)
+    try {
+      const token = authToken || localStorage.getItem('skillbazaar_token')
+      const res = await downloadSkillZip(pid, { token, userId })
+      saveBlobAsFile(res.data, `${item.name || item.product_name || 'skill'}.zip`)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || '下载失败，请稍后重试'
+      alert(typeof msg === 'string' ? msg : '下载失败，请稍后重试')
+    } finally {
+      setZipBusy(null)
+    }
+  }
+
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('agents')
   const [items, setItems] = useState([])
@@ -262,6 +280,14 @@ export default function MyLibraryPage({ userId, authToken }) {
                       <span><Calendar size={13} /> {item.purchased_at ? new Date(item.purchased_at).toLocaleDateString('zh-CN') : '未知日期'}</span>
                       <span><Coins size={13} /> {item.price_paid ?? item.price ?? '-'} 金币</span>
                     </div>
+                    <button
+                      className="btn btn-ghost btn-sm library-card-download"
+                      onClick={(e) => handleDownloadZip(e, item)}
+                      disabled={zipBusy === (item.product_id || item.id)}
+                    >
+                      <Download size={13} />
+                      {zipBusy === (item.product_id || item.id) ? '打包中…' : '下载 zip'}
+                    </button>
                   </div>
                 )
               })}

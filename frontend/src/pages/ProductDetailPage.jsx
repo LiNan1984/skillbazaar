@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Copy,
 } from 'lucide-react'
-import { getProduct, getProducts, getUser, getMe, getLibrary, executeSkill } from '../services/api'
+import { getProduct, getProducts, getUser, getMe, getLibrary, executeSkill, downloadSkillZip, saveBlobAsFile } from '../services/api'
 import PurchaseModal from '../components/PurchaseModal'
 import ProductCard from '../components/ProductCard'
 import ProductReviews from '../components/ProductReviews'
@@ -78,6 +78,7 @@ export default function ProductDetailPage({ userId, authToken }) {
   const [balance, setBalance] = useState(0)
   const [showPurchase, setShowPurchase] = useState(false)
   const [owned, setOwned] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   // Trial execution state
   const [trialInput, setTrialInput] = useState('')
@@ -85,6 +86,24 @@ export default function ProductDetailPage({ userId, authToken }) {
   const [trialResult, setTrialResult] = useState(null)
   const [trialError, setTrialError] = useState(null)
   const [evalReport, setEvalReport] = useState(null)
+
+  const handleDownload = async () => {
+    if (!owned) {
+      setShowPurchase(true)
+      return
+    }
+    setDownloading(true)
+    try {
+      const token = authToken || localStorage.getItem('skillbazaar_token')
+      const res = await downloadSkillZip(id, { token, userId })
+      saveBlobAsFile(res.data, `${product?.name || 'skill'}.zip`)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || '下载失败，请稍后重试'
+      alert(typeof msg === 'string' ? msg : '下载失败，请稍后重试')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -504,6 +523,16 @@ export default function ProductDetailPage({ userId, authToken }) {
               {t('pd.buyNow')} · {'￥'}{product.price} {t('pd.coins')}
             </button>
           )}
+
+          <button
+            className={owned ? 'btn-download-zip btn-owned-zip' : 'btn-download-zip'}
+            onClick={handleDownload}
+            disabled={downloading}
+            title={owned ? t('pd.downloadZip') : t('pd.downloadNeedBuy')}
+          >
+            <Download size={16} />
+            {downloading ? (lang === 'zh' ? '打包中…' : 'Packaging…') : t('pd.downloadZip')}
+          </button>
         </div>
 
         {related.length > 0 && (
