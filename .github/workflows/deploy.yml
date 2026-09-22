@@ -58,6 +58,7 @@ jobs:
             fi
             echo "==> 仓库路径: $DIR"
             # 仓库属主可能与登录用户不同，先解除 git 的 safe.directory 保护
+            export DIR
             git config --global --add safe.directory "$DIR" || true
             cd "$DIR"
 
@@ -113,21 +114,48 @@ jobs:
 
             # ---------- 6. 后端依赖 ----------
             cd "$DIR/backend"
-            python3 -m pip install -q -r requirements.txt || true
+            python3 -m pip install -q --break-system-packages -r requirements.txt || true
             cd "$DIR"
 
-            # ---------- 7. 重启后端（按识别到的管理方式） ----------
+            # ---------- 7. 重启后端 ----------
+            # systemd → pm2（按工作目录匹配应用名）→ docker → 裸 uvicorn
             UNIT=""
-            for u in skillbazaar bazaar skillbazaar-backend skillbazaar-api; do
+            for u in skillbazaar bazaar skillbazaar-backend skillbazaar-api skillbazaar-web; do
               if systemctl list-unit-files 2>/dev/null | grep -q "^${u}\.service"; then UNIT="$u"; break; fi
             done
 
             if [ -n "$UNIT" ]; then
               echo "==> systemd 重启: $UNIT"
               systemctl restart "$UNIT"
-            elif command -v pm2 >/dev/null 2>&1 && pm2 jlist 2>/dev/null | grep -q skillbazaar; then
-              echo "==> pm2 重启"
-              pm2 restart skillbazaar || pm2 restart all
+            elif command -v pm2 >/dev/null 2>&1; then
+              echo "==> pm2 应用列表:"
+              pm2 list --no-color || true
+              # 按 cwd / 入口路径匹配应用名，不猜名字
+              PM2_APP=$(pm2 jlist 2>/dev/null | DIR="$DIR" python3 -c '
+            import json, os, sys
+            target = os.environ.get("DIR", "")
+            try:
+                apps = json.load(sys.stdin)
+            except Exception:
+                apps = []
+            for a in apps:
+                env = a.get("pm2_env", {})
+                cwd = env.get("cwd") or ""
+                exe = env.get("pm_exec_path") or ""
+                if target and (target in cwd or target in exe):
+                    print(a.get("name", ""))
+                    break
+            ')
+              if [ -n "$PM2_APP" ]; then
+                echo "==> pm2 重启: $PM2_APP"
+                pm2 restart "$PM2_APP" --update-env
+                pm2 save || true
+              else
+                echo "==> pm2 中未找到匹配应用，回退到裸 uvicorn"
+                pkill -f 'uvicorn main:app' || true
+                sleep 2
+                (cd "$DIR/backend" && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/skillbazaar.log 2>&1 &)
+              fi
             elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qi skillbazaar; then
               echo "==> docker 重启"
               docker restart "$(docker ps --format '{{.Names}}' | grep -i skillbazaar | head -1)"
@@ -135,9 +163,7 @@ jobs:
               echo "==> 未识别到 systemd/pm2/docker，按裸 uvicorn 进程重启"
               pkill -f 'uvicorn main:app' || true
               sleep 2
-              cd "$DIR/backend"
-              nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/skillbazaar.log 2>&1 &
-              cd "$DIR"
+              (cd "$DIR/backend" && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/skillbazaar.log 2>&1 &)
             fi
 
             # ---------- 8. 健康检查 ----------
@@ -148,7 +174,9 @@ jobs:
             done
             if [ "$OK" != "1" ]; then
               echo "::error::健康检查未通过"
-              journalctl -u "${UNIT:-none}" -n 50 --no-pager 2>/dev/null || tail -50 /var/log/skillbazaar.log 2>/dev/null || true
+              journalctl -u "${UNIT:-none}" -n 50 --no-pager 2>/dev/null || true
+              pm2 logs --nostream --lines 40 2>/dev/null || true
+              tail -60 /var/log/skillbazaar.log 2>/dev/null || true
               exit 12
             fi
             echo "==> 健康检查通过"
