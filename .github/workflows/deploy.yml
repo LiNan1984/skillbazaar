@@ -88,8 +88,9 @@ jobs:
             git fetch origin "$BRANCH"
 
             # 只把「未跟踪且与上游同名」的文件移开（不删除），避免 reset 被拒
-            git ls-tree -r --name-only "origin/$BRANCH" | sort > /tmp/upstream_files.txt
-            git ls-files --others --exclude-standard | sort > /tmp/untracked_files.txt
+            # core.quotePath=false：中文文件名不转义，否则后续 mv 会因引号对不上而失败
+            git -c core.quotePath=false ls-tree -r --name-only "origin/$BRANCH" | sort > /tmp/upstream_files.txt
+            git -c core.quotePath=false ls-files --others --exclude-standard | sort > /tmp/untracked_files.txt
             comm -12 /tmp/untracked_files.txt /tmp/upstream_files.txt > /tmp/conflicts.txt || true
             if [ -s /tmp/conflicts.txt ]; then
               echo "==> 移开的冲突未跟踪文件:"
