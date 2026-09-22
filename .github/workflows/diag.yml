@@ -1,0 +1,59 @@
+name: Server diagnostics
+
+# 只读诊断：查伺服路径、进程、nginx 配置。用于部署排障。
+on:
+  workflow_dispatch:
+    inputs:
+      cmd:
+        description: '额外命令（可选）'
+        required: false
+        default: ''
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run diagnostics
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          command_timeout: 4m
+          script: |
+            set +e
+            DIR=/root/skillbazaar
+            echo "===== 1. 前端构建产物 ====="
+            ls -la "$DIR/frontend/dist" 2>/dev/null | head -15
+            echo "--- dist/index.html 引用的 bundle ---"
+            grep -oE '/assets/index-[^"]*\.js' "$DIR/frontend/dist/index.html" 2>/dev/null | head -3
+            echo "--- dist 中下载按钮 ---"
+            grep -rl "下载 Skill 包" "$DIR/frontend/dist/assets" 2>/dev/null | head -3
+
+            echo
+            echo "===== 2. nginx 站点配置 ====="
+            grep -rn "skillbazaar" /etc/nginx/ 2>/dev/null | head -10
+            echo "--- 相关 server 块 root ---"
+            for f in $(grep -rl "skillbazaar" /etc/nginx/ 2>/dev/null); do
+              echo "### $f"
+              grep -nE "server_name|root|listen|proxy_pass" "$f" | head -20
+            done
+
+            echo
+            echo "===== 3. 伺服进程与端口 ====="
+            ss -ltnp 2>/dev/null | grep -E ':(80|443|3000|8000|8003|8080|7788)\b' | head -10
+
+            echo
+            echo "===== 4. pm2 应用 ====="
+            pm2 list --no-color 2>/dev/null | head -20
+
+            echo
+            echo "===== 5. openresty / 其他 ====="
+            ls /usr/local/openresty/nginx/conf/ 2>/dev/null | head -5
+            grep -rn "skillbazaar" /usr/local/openresty/nginx/conf/ 2>/dev/null | head -10
+
+            echo
+            echo "===== 6. 额外命令 ====="
+            eval "${{ inputs.cmd }}" 2>&1 | head -40
