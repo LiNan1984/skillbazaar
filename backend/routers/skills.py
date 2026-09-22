@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
 import json
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
+import zipfile
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 import database as db
-from services.skill_vault import encrypt_content
+from services.skill_vault import encrypt_content, decrypt_content, verify_integrity
 from services.license_service import create_license, check_user_access, verify_license
 from services.execution_service import execute_skill
 from services.pricing_service import calculate_dynamic_price, get_price_analysis, recalculate_all_dynamic_prices
@@ -138,6 +141,76 @@ async def execute_skill_endpoint(product_id: int, req: SkillExecutionRequest, re
 
     result["trial_remaining"] = trial_remaining
     return result
+
+
+@router.get("/{product_id}/download")
+async def download_skill_package(
+    product_id: int,
+    license_token: str = Query(None, description="License token，已购买用户可用"),
+    user_id: str = Query(None, description="用户 ID，与登录 token 二选一"),
+    authorization: str = None,
+):
+    """下载 Skill 包（zip）。
+
+    - 已购买 / 持有有效 license：下载完整包（code 类型为上传时的 zip 原包，
+      prompt 类型自动打包为含 SKILL.md 的 zip）。
+    - 未购买：仅 prompt 类型允许预览下载；code / sdk 返回 403。
+    """
+    from services.license_service import verify_license as _verify_license
+
+    product = await db.fetch_product_by_id(product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+
+    asset = await db.fetch_skill_asset(product_id)
+    if not asset:
+        raise HTTPException(404, "No skill asset found for this product")
+
+    # --- 授权校验：license_token 或 user_id 任一通过即可 ---
+    # 购买记录（transactions）与 license 都算数： buy_product 只写交易不建 license。
+    has_access = False
+    if license_token:
+        verified = await _verify_license(license_token, product_id)
+        has_access = bool(verified.get("valid"))
+    if not has_access and user_id:
+        access = await check_user_access(user_id, product_id)
+        has_access = bool(access.get("has_access"))
+    if not has_access and user_id and await db.check_already_purchased(user_id, product_id):
+        has_access = True
+    if not has_access and asset.get("skill_type") != "prompt":
+        raise HTTPException(403, "购买后可下载 Skill 包")
+
+    content = decrypt_content(
+        asset["encrypted_blob"],
+        asset["encryption_iv"],
+        asset["encryption_salt"],
+    )
+    if asset.get("content_hash") and not verify_integrity(content, asset["content_hash"]):
+        raise HTTPException(500, "Skill 包完整性校验失败")
+
+    name = product.get("name") or f"skill-{product_id}"
+    if content[:4] == b"PK\x03\x04":
+        payload, filename = content, f"{name}.zip"
+    else:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("SKILL.md", content)
+        payload, filename = buf.getvalue(), f"{name}-skill.zip"
+
+    try:
+        await db.increment_product_downloads(product_id)
+    except Exception:
+        pass  # 计数失败不影响下载
+
+    return StreamingResponse(
+        io.BytesIO(payload),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(payload)),
+            "X-Skill-Sha256": asset.get("content_hash") or "",
+        },
+    )
 
 
 @router.post("/license")

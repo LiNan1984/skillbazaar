@@ -412,6 +412,62 @@ img {
   transform: translateY(0);
 }
 
+/* Skill 包 zip 下载按钮 */
+.btn-download-zip {
+  width: 100%;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 1px dashed rgba(99, 102, 241, 0.55);
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.08);
+  color: #a5b4fc;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-download-zip:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.85);
+  color: #c7d2fe;
+}
+
+.btn-download-zip:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.btn-download-zip.btn-owned-zip {
+  border-style: solid;
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+}
+
+.btn-download-zip.btn-owned-zip:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.9);
+  color: #86efac;
+}
+
+.library-card-download {
+  margin-top: 10px;
+  width: 100%;
+  justify-content: center;
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.library-card-download:hover:not(:disabled) {
+  color: #c7d2fe;
+  border-color: rgba(99, 102, 241, 0.8);
+}
+
 .btn-owned {
   width: 100%;
   padding: 14px 24px;

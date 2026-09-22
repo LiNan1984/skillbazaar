@@ -2806,6 +2806,20 @@ async def delete_user_agent(agent_id: int, user_id: str):
         await db.close()
 
 
+async def increment_product_downloads(product_id: int) -> bool:
+    """累加商品下载计数。"""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE products SET downloads = downloads + 1 WHERE id = ?",
+            (product_id,),
+        )
+        await db.commit()
+        return True
+    finally:
+        await db.close()
+
+
 async def increment_agent_runs(agent_id: int):
     db = await get_db()
     try:

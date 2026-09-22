@@ -1,0 +1,139 @@
+name: Deploy to server
+
+# 手动触发部署（workflow_dispatch）。服务器 SSH 从本机不可达时，用 GitHub runner 作为跳板。
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: '要部署的分支'
+        required: true
+        default: 'feat/skill-zip-download'
+      path:
+        description: '服务器上的仓库路径（留空自动探测）'
+        required: false
+        default: ''
+      reset_hard:
+        description: '是否 git reset --hard 丢弃服务器上的本地改动（yes/no）'
+        required: true
+        default: 'no'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          command_timeout: 15m
+          script: |
+            set -eux
+
+            BRANCH="${{ inputs.branch }}"
+            GIVEN_PATH="${{ inputs.path }}"
+            RESET_HARD="${{ inputs.reset_hard }}"
+
+            # ---------- 1. 定位仓库 ----------
+            if [ -n "$GIVEN_PATH" ]; then
+              DIR="$GIVEN_PATH"
+            else
+              DIR=""
+              for d in /opt/skillbazaar /root/skillbazaar /root/sbz /srv/skillbazaar /var/www/skillbazaar /home/*/skillbazaar; do
+                if [ -d "$d/.git" ] && [ -f "$d/backend/main.py" ]; then DIR="$d"; break; fi
+              done
+              if [ -z "$DIR" ]; then
+                DIR=$(find / -maxdepth 5 -type d -name skillbazaar 2>/dev/null \
+                      | while read -r d; do [ -f "$d/backend/main.py" ] && [ -d "$d/.git" ] && echo "$d" && break; done \
+                      | head -1)
+              fi
+            fi
+            if [ -z "$DIR" ] || [ ! -d "$DIR/.git" ]; then
+              echo "::error::未在服务器上找到 skillbazaar 仓库，请用 path 输入项指定"
+              exit 10
+            fi
+            echo "==> 仓库路径: $DIR"
+            cd "$DIR"
+
+            # ---------- 2. 记录当前状态（便于回滚） ----------
+            git log --oneline -1 || true
+            git status --porcelain | head -20 || true
+
+            # ---------- 3. 备份数据库 ----------
+            for db in frontend/skillbazaar.db backend/skillbazaar.db; do
+              if [ -f "$db" ]; then
+                cp "$db" "$db.bak.$(date +%Y%m%d%H%M%S)"
+                echo "==> 已备份 $db"
+              fi
+            done
+
+            # ---------- 4. 更新代码 ----------
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            if [ "$RESET_HARD" = "yes" ]; then
+              git reset --hard "origin/$BRANCH"
+            else
+              git merge --ff-only "origin/$BRANCH" || {
+                echo "::error::无法 fast-forward，服务器有本地提交或分叉；确认后用 reset_hard=yes 重跑"
+                exit 11
+              }
+            fi
+            git log --oneline -1
+
+            # ---------- 5. 构建前端 ----------
+            cd "$DIR/frontend"
+            if [ -d node_modules ]; then npm ci; else npm ci; fi
+            npm run build
+            cd "$DIR"
+
+            # ---------- 6. 后端依赖 ----------
+            cd "$DIR/backend"
+            python3 -m pip install -q -r requirements.txt || true
+            cd "$DIR"
+
+            # ---------- 7. 重启后端（按识别到的管理方式） ----------
+            UNIT=""
+            for u in skillbazaar bazaar skillbazaar-backend skillbazaar-api; do
+              if systemctl list-unit-files 2>/dev/null | grep -q "^${u}\.service"; then UNIT="$u"; break; fi
+            done
+
+            if [ -n "$UNIT" ]; then
+              echo "==> systemd 重启: $UNIT"
+              systemctl restart "$UNIT"
+            elif command -v pm2 >/dev/null 2>&1 && pm2 jlist 2>/dev/null | grep -q skillbazaar; then
+              echo "==> pm2 重启"
+              pm2 restart skillbazaar || pm2 restart all
+            elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qi skillbazaar; then
+              echo "==> docker 重启"
+              docker restart "$(docker ps --format '{{.Names}}' | grep -i skillbazaar | head -1)"
+            else
+              echo "==> 未识别到 systemd/pm2/docker，按裸 uvicorn 进程重启"
+              pkill -f 'uvicorn main:app' || true
+              sleep 2
+              cd "$DIR/backend"
+              nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/skillbazaar.log 2>&1 &
+              cd "$DIR"
+            fi
+
+            # ---------- 8. 健康检查 ----------
+            OK=0
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then OK=1; break; fi
+              sleep 2
+            done
+            if [ "$OK" != "1" ]; then
+              echo "::error::健康检查未通过"
+              journalctl -u "${UNIT:-none}" -n 50 --no-pager 2>/dev/null || tail -50 /var/log/skillbazaar.log 2>/dev/null || true
+              exit 12
+            fi
+            echo "==> 健康检查通过"
+            curl -fsS http://127.0.0.1:8000/health || true
+            echo
+
+            # ---------- 9. 验证下载端点存在 ----------
+            curl -fsS -o /dev/null -w "download endpoint HTTP %{http_code}\n" \
+              "http://127.0.0.1:8000/api/skills/999999/download" || true
+            echo "==> 部署完成"
