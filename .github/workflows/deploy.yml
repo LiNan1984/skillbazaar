@@ -108,9 +108,34 @@ jobs:
 
             # ---------- 5. 构建前端 ----------
             cd "$DIR/frontend"
-            if [ -d node_modules ]; then npm ci; else npm ci; fi
+            npm ci
             npm run build
             cd "$DIR"
+
+            # ---------- 5b. 同步前端产物到 nginx 伺服目录 ----------
+            # nginx root 是 /var/www/<域名>/dist，不是仓库里的 frontend/dist
+            NGINX_CONF=""
+            for c in /etc/nginx/sites-available/skillbazaar /etc/nginx/sites-available/skillbazaar.harness-agent.app; do
+              [ -f "$c" ] && NGINX_CONF="$c" && break
+            done
+            WEBROOT=$(grep -oE 'root[[:space:]]+[^;]+;' "$NGINX_CONF" 2>/dev/null | head -1 | sed -E 's/root[[:space:]]+//; s/;[[:space:]]*$//' || true)
+            if [ -z "$WEBROOT" ]; then
+              WEBROOT="/var/www/skillbazaar.harness-agent.app/dist"
+              echo "==> 未从 nginx 读到 root，使用默认: $WEBROOT"
+            else
+              echo "==> nginx root: $WEBROOT"
+            fi
+            mkdir -p "$WEBROOT"
+            if command -v rsync >/dev/null 2>&1; then
+              rsync -a --delete "$DIR/frontend/dist/" "$WEBROOT/"
+            else
+              find "$WEBROOT" -mindepth 1 -delete
+              cp -a "$DIR/frontend/dist/." "$WEBROOT/"
+            fi
+            echo "==> 伺服目录内容:"
+            ls -la "$WEBROOT" | head -8
+            echo "==> 伺服 index.html 引用的 bundle:"
+            grep -oE '/assets/index-[^"]*\.js' "$WEBROOT/index.html" 2>/dev/null | head -2
 
             # ---------- 6. 后端依赖 ----------
             cd "$DIR/backend"
@@ -167,10 +192,13 @@ jobs:
             fi
 
             # ---------- 8. 健康检查（自动探测端口） ----------
-            PORT=""
-            for p in 8000 8001 8002 8003 8004 8080 8888; do
-              if curl -fsS "http://127.0.0.1:$p/health" >/dev/null 2>&1; then PORT="$p"; break; fi
-            done
+            # 后端端口从 nginx 的 proxy_pass 推导，退化为逐端口探测
+            PORT=$(grep -oE 'proxy_pass http://127\.0\.0\.1:[0-9]+/api/' "$NGINX_CONF" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+            if [ -z "$PORT" ]; then
+              for p in 8000 8001 8002 8003 8004 8080 8888; do
+                if curl -fsS "http://127.0.0.1:$p/health" >/dev/null 2>&1; then PORT="$p"; break; fi
+              done
+            fi
             if [ -z "$PORT" ]; then
               echo "::error::健康检查未通过（已探测 8000-8004/8080/8888）"
               echo "==> pm2 状态:"
