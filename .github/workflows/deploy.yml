@@ -73,17 +73,35 @@ jobs:
               fi
             done
 
-            # ---------- 4. 更新代码 ----------
+            # ---------- 4. 更新代码（先备份，再对齐到 origin） ----------
+            STAMP=$(date +%Y%m%d%H%M%S)
+            echo "==> 备份工作区到 /root/skillbazaar-pre-deploy-$STAMP.tar.gz"
+            tar czf "/root/skillbazaar-pre-deploy-$STAMP.tar.gz" \
+              --exclude=node_modules --exclude=.git --exclude='*.db.bak.*' -C "$DIR" . || true
+
+            # 记录本地改动，便于部署后人工核对是否丢失了服务器专属修改
+            git diff > "/root/skillbazaar-local-changes-$STAMP.patch" 2>/dev/null || true
+            git status --porcelain > "/root/skillbazaar-status-$STAMP.txt" || true
+            echo "==> 本地改动条数: $(wc -l < /root/skillbazaar-local-changes-$STAMP.patch) / 状态条目: $(wc -l < /root/skillbazaar-status-$STAMP.txt)"
+            head -30 "/root/skillbazaar-status-$STAMP.txt" || true
+
             git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-            if [ "$RESET_HARD" = "yes" ]; then
-              git reset --hard "origin/$BRANCH"
-            else
-              git merge --ff-only "origin/$BRANCH" || {
-                echo "::error::无法 fast-forward，服务器有本地提交或分叉；确认后用 reset_hard=yes 重跑"
-                exit 11
-              }
+
+            # 只把「未跟踪且与上游同名」的文件移开（不删除），避免 reset 被拒
+            git ls-tree -r --name-only "origin/$BRANCH" | sort > /tmp/upstream_files.txt
+            git ls-files --others --exclude-standard | sort > /tmp/untracked_files.txt
+            comm -12 /tmp/untracked_files.txt /tmp/upstream_files.txt > /tmp/conflicts.txt || true
+            if [ -s /tmp/conflicts.txt ]; then
+              echo "==> 移开的冲突未跟踪文件:"
+              cat /tmp/conflicts.txt
+              while read -r f; do
+                [ -n "$f" ] && mv "$f" "$f.server-bak-$STAMP"
+              done < /tmp/conflicts.txt
             fi
+
+            # 丢弃对已跟踪文件的本地修改（已记录在 patch 与 tar 备份中）
+            git checkout -- . || true
+            git reset --hard "origin/$BRANCH"
             git log --oneline -1
 
             # ---------- 5. 构建前端 ----------
